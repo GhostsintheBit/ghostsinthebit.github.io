@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Instructions — Logged-Out Web Scrape — Phantom Feed</title>
+  <link rel="icon" type="image/x-icon" href="/images/favicons/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicons/favicon-16x16.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicons/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/images/favicons/favicon-192x192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicons/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <link rel="stylesheet" href="/platform/styles/core.css" />
+</head>
+<body>
+  <header class="site-header">
+    <a href="/" class="brand"><span class="brand-mark">◯</span><span class="brand-name">Ghost in the Bit</span></a>
+    <nav class="site-nav-inline" id="site-nav-inline"></nav>
+  </header>
+
+  <main class="article">
+    <header class="article-header">
+      <h1 class="article-title">Scenario 01 — Logged-Out Web Scrape</h1>
+      <div class="article-meta">
+        <span class="difficulty-pill" data-level="beginner">beginner</span>
+        <span class="category-pill">scraping</span>
+        <span>Estimated time: 45 min</span>
+      </div>
+    </header>
+
+    <h2>Scenario</h2>
+    <p>
+      Yesterday, the Phantom Feed security team noticed unusual patterns in
+      <strong>logged-out web traffic</strong> against the primary site
+      <code>web.phantomfeed.io</code>. To investigate, you have been given
+      a single day of HTTP logs (~170,000 rows) captured during the
+      window of interest.
+    </p>
+
+    <h2>Your goal</h2>
+    <p>
+      Determine whether <strong>automated scraping</strong> is occurring against
+      <code>web.phantomfeed.io</code>. If so, you should be able to answer:
+    </p>
+    <ul>
+      <li>Which clients are responsible?</li>
+      <li>What are they targeting?</li>
+      <li>What signals make this defensibly automated activity (not human or partner)?</li>
+      <li>What mitigation would you recommend that does not over-block legitimate users?</li>
+    </ul>
+
+    <h2>What you may assume</h2>
+    <ul>
+      <li>Logs represent a mix of normal user traffic, a legitimate partner integration, and potentially automated traffic.</li>
+      <li>Suspicious activity is <strong>not labeled</strong>. You will need to build the case.</li>
+      <li>The dataset includes both logged-out traffic (<code>userID = '0'</code>, <code>authStatus = 'logged_out'</code>) and authenticated browsing (<code>authStatus = 'logged_in'</code>). The interesting activity for this scenario is in the logged-out portion.</li>
+      <li>IPs are intentionally non-routable / synthetic for safety. Do not attempt to contact them.</li>
+    </ul>
+
+    <h2>The dataset</h2>
+    <p>
+      You will be querying a single SQLite table named
+      <code>phantomfeed_logs_logged_out</code>. The console will auto-load it when
+      you select this scenario. Click the <strong>Schema</strong> tab in the
+      sidebar to see all columns with hints, or click <strong>Sample queries</strong>
+      to load starter SQL.
+    </p>
+
+    <h2>Tips</h2>
+    <ul>
+      <li>Combine signals — a single signal (high volume per IP, identical JA4, etc.) will mislead you in this dataset.</li>
+      <li>The partner integration in this data has high volume too. Make sure your detection doesn't false-positive them.</li>
+      <li>If you get stuck, the <strong>Hints</strong> tab in the sidebar provides progressive nudges from broad framing to specific signal stacking.</li>
+    </ul>
+
+    <p style="margin-top: 32px;">
+      <a class="primary-btn" href="/platform/console.html?scenario=01-logged-out-scrape">Open the console for this scenario</a>
+    </p>
+  </main>
+
+  <footer class="site-footer">
+    <p><span id="footer-year"></span> · Ghost in the Bit</p>
+  </footer>
+  <script type="module">
+    import { renderSiteNav } from "/platform/lib/site-nav.js";
+    renderSiteNav(document.getElementById("site-nav-inline"));
+    document.getElementById("footer-year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>

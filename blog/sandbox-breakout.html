@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sandboxed Escaping — Ghost in the Bit</title>
+  <meta name="description" content="A sandbox test user that was supposed to be isolated turned out to have a quiet path into a sister platform's real user data." />
+  <link rel="icon" type="image/x-icon" href="/images/favicons/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicons/favicon-16x16.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicons/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/images/favicons/favicon-192x192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicons/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <link rel="stylesheet" href="/platform/styles/core.css" />
+</head>
+<body>
+  <header class="site-header">
+    <a href="/" class="brand"><span class="brand-mark">◯</span><span class="brand-name">Ghost in the Bit</span></a>
+    <nav class="site-nav-inline" id="site-nav-inline"></nav>
+  </header>
+
+  <main class="article">
+    <header class="article-header">
+      <h1 class="article-title">Sandboxed Escaping</h1>
+      <div class="article-meta">
+        <span class="category-pill">authorization</span>
+        <span>Sandbox</span>
+      </div>
+    </header>
+
+    <h2>Discovering the issue</h2>
+    <p>While working on a security review for a popular application, I ran into something that felt a little off. The app had a sandbox user meant for testing and development, so people could try things out without putting real user data at risk. At least, that was the intention.</p>
+    <p>Before going further, a quick note. Since work with this client is still active, all values and examples here are replaced with stand-in data to protect the real environment.</p>
+    <p>As I spent more time with the app, I found a path that allowed these restricted sandbox accounts to interact with information related to real users on another connected platform. It was not something you would find by accident. It took some patience and a fair bit of curiosity to piece together. Once it clicked, it became clear that the isolation was not as strong as it first appeared.</p>
+
+    <h3>How the pieces started to fit</h3>
+    <p>In theory, sandbox users should live in their own world. They are not supposed to see or touch anything that belongs to real users. That is the entire point of having a separate environment. While I was testing different endpoints though, I started to notice behavior that did not match that expectation. Even though I was using a sandbox account, the responses hinted that the account was being exposed to media from a connected sister application. That raised the question of what else this token could reach across that boundary.</p>
+
+    <h4>Step 1: Capturing the token</h4>
+    <p>I began by logging in with a sandbox account while intercepting traffic through Burp Suite. This gave me a session token that the platform used to identify the account and decide what it should be able to do.</p>
+    <pre><code>GET /account/verify?info=&amp;options=1&amp;token=ABC[REDACTED] HTTP/2
+Host: api.exampleplatform.com
+User-Agent: Mozilla/5.0</code></pre>
+    <p>The response confirmed that the token belonged to my sandbox user, which matched what I expected at this stage.</p>
+
+    <h4>Step 2: Probing endpoints</h4>
+    <p>The next step was to see how far that token could go. I started calling other endpoints that were tied to the surrounding environment. At first, everything lined up with the documented permissions for the sandbox account. Many requests were rejected with clear messages that the request was not supported or did not have the right level of access.</p>
+    <pre><code>{
+  "issue": {
+    "details": "Unsupported. Invalid request or insufficient permissions.",
+    "status": 400
+  }
+}</code></pre>
+    <p>That was the expected behavior, and if things had stopped there, the story would have ended. But once I pointed the same token at endpoints that belonged to the sister application, things changed.</p>
+    <pre><code>GET /user-profile/67890?info=&amp;options=1&amp;token=ABC[REDACTED] HTTP/2
+Host: api.sisterplatform.com
+User-Agent: Mozilla/5.0</code></pre>
+    <p>This time, the response did not contain an error. Instead, it returned structured data about a real user on the sister platform, including metadata and references to their media and activity.</p>
+
+    <h3>Realizing the connection to the sister app</h3>
+    <p>What made this more serious is that the sister platform is a production system with a real and active user base. Many people have accounts on both platforms. Under the hood, the two applications share some of the same API logic. Because of that, the sandbox token I captured could successfully reach endpoints in the sister environment.</p>
+    <p>This meant that a sandbox account, which should have been limited to a safe and contained space, could access profiles and activity information associated with real users on the sister platform. In the right conditions, it might even be possible to send interactions on their behalf. At that point, the sandbox felt less like a safe test space and more like an unexpected doorway.</p>
+
+    <h3>Where things went wrong</h3>
+    <ol>
+      <li><strong>Shared API logic.</strong> Both environments relied on overlapping API components. That shared logic did not fully separate requests from the sandbox and the sister platform.</li>
+      <li><strong>Session tokens used across environments.</strong> The same session token format appeared to be valid on both sides. The token for the sandbox user was not strictly limited to the sandbox rules.</li>
+      <li><strong>Missing context checks.</strong> The sister platform did not consistently verify that the incoming token belonged to a user in its own environment. Instead, it accepted the token and proceeded with the request.</li>
+    </ol>
+
+    <h3>Strengthening the separation</h3>
+    <ul>
+      <li><strong>Scoped tokens.</strong> Tokens should carry clear context about the environment they belong to, and the services they interact with should enforce that scope every time.</li>
+      <li><strong>Stricter validation at endpoints.</strong> Endpoints should verify not just that the token is valid, but that it is being used in the right context and for the correct platform.</li>
+      <li><strong>Clear separation of environments.</strong> Where possible, test and production environments should use distinct infrastructure or at least stronger boundary controls so that cross-environment access can not quietly slip through.</li>
+    </ul>
+
+    <h3>Closing thoughts</h3>
+    <p>This experience was a helpful reminder that details around environment design are easy to overlook. It is not always the obvious access control checks that cause trouble. Sometimes it is the quiet reuse of a token format or shared logic between applications that opens the door.</p>
+    <p>In the end, testing like this is not about pointing fingers. It is about finding the gaps that are hard to see from the inside, so that teams can close them and keep users safer. Each issue like this is an opportunity to learn and to improve how we think about separation, trust, and access in complex ecosystems.</p>
+    <div class="newsletter-cta inline">
+      <h2 class="newsletter-cta-heading">Liked this?</h2>
+      <p class="newsletter-cta-sub">
+        I write one of these a month. Drop your email below to get new posts
+        and scenarios in your inbox. No spam.
+      </p>
+      <form
+        action="https://buttondown.com/api/emails/embed-subscribe/ghostinthebit"
+        method="post"
+        class="embeddable-buttondown-form"
+        target="popupwindow"
+      >
+        <label for="bd-email">Enter your email</label>
+        <input type="email" name="email" id="bd-email" placeholder="your@email.com" required />
+        <input type="submit" value="Subscribe" />
+        <p>
+          <a href="https://buttondown.com/refer/ghostinthebit" target="_blank" rel="noopener">
+            Powered by Buttondown.
+          </a>
+        </p>
+      </form>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p><span id="footer-year"></span> · Ghost in the Bit</p>
+  </footer>
+  <script type="module">
+    import { renderSiteNav } from "/platform/lib/site-nav.js";
+    renderSiteNav(document.getElementById("site-nav-inline"), "blog");
+    document.getElementById("footer-year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>

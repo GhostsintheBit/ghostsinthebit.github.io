@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Instructions — Insider Data Exfiltration — Phantom Feed</title>
+  <link rel="icon" type="image/x-icon" href="/images/favicons/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicons/favicon-16x16.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicons/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/images/favicons/favicon-192x192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicons/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <link rel="stylesheet" href="/platform/styles/core.css" />
+</head>
+<body>
+  <header class="site-header">
+    <a href="/" class="brand"><span class="brand-mark">◯</span><span class="brand-name">Ghost in the Bit</span></a>
+    <nav class="site-nav-inline" id="site-nav-inline"></nav>
+  </header>
+
+  <main class="article">
+    <header class="article-header">
+      <h1 class="article-title">Scenario 03 — Insider Data Exfiltration</h1>
+      <div class="article-meta">
+        <span class="difficulty-pill" data-level="intermediate">intermediate</span>
+        <span class="category-pill">insider threat</span>
+        <span>Estimated time: 75 min</span>
+      </div>
+    </header>
+
+    <h2>Scenario</h2>
+    <p>
+      An internal SOC tip came in this morning. Word from another team is that
+      one of our data-science engineers is in the final interview round at a
+      direct competitor. HR has not formally heard about a resignation yet,
+      but they would like to know — before anyone walks out the door —
+      whether there is evidence of unusual data access tied to that
+      employee, or to anyone else who might be in the same position.
+    </p>
+    <p>
+      You have 60 days of authenticated traffic against internal admin and
+      data-science endpoints, plus four related tables that catalog
+      employees, endpoint definitions, sensitivity classifications, and
+      sampled query metadata. This is a multi-table investigation. You will
+      be joining.
+    </p>
+
+    <h2>Your goal</h2>
+    <ul>
+      <li>Identify whether any employee's behavior in the last 15 days deviates substantially from their own first-45-day baseline.</li>
+      <li>Quantify what was accessed, and ideally how much data left.</li>
+      <li>Distinguish exfiltration from legitimate behavioral changes (role moves, PTO, project shifts).</li>
+      <li>Be ready to present your findings to HR and Legal — they will need defensible signals, not vibes.</li>
+    </ul>
+
+    <h2>What you may assume</h2>
+    <ul>
+      <li>Every employee in the dataset has legitimate access to the endpoints they hit. This is not an authorization problem. This is a behavioral problem.</li>
+      <li>Two employees have documented status changes in the 60-day window (PTO, role change). Those changes appear in <code>employees.status_notes</code>.</li>
+      <li>The suspect (if any) is one of the 50 employees. You don't know who in advance.</li>
+      <li>IPs in 10.42.x.x are corporate office addresses. IPs in 10.99.x.x are VPN.</li>
+    </ul>
+
+    <h2>The dataset — five tables</h2>
+    <ul>
+      <li><code>employees</code> — 50 rows. emp_id, name, team, role, hired_date, status_notes.</li>
+      <li><code>endpoints</code> — 29 rows. Endpoint catalog with category, typical response size, allowed teams.</li>
+      <li><code>data_classification</code> — 29 rows. endpoint_path → sensitivity (public / internal / confidential / restricted).</li>
+      <li><code>access_logs</code> — ~220K rows. The primary investigation table.</li>
+      <li><code>query_audit</code> — ~5K rows. Sampled per-query metadata where queries or exports were run, including target table list and rows_returned.</li>
+    </ul>
+    <p>
+      Click the <strong>Schema</strong> tab in the sidebar to see all five
+      tables with column-level hints.
+    </p>
+
+    <h2>Why this is harder than a scraping investigation</h2>
+    <p>
+      In a scraping investigation, the bad actor's traffic looks fundamentally
+      different from normal traffic. In an insider investigation, the bad actor
+      <em>is</em> normal traffic — until they aren't. Detection requires
+      learning the per-employee normal first and then looking for deviation.
+      Cross-employee comparisons will mislead you.
+    </p>
+
+    <p style="margin-top: 32px;">
+      <a class="primary-btn" href="/platform/console.html?scenario=03-insider-exfil">Open the console for this scenario</a>
+    </p>
+  </main>
+
+  <footer class="site-footer">
+    <p><span id="footer-year"></span> · Ghost in the Bit</p>
+  </footer>
+  <script type="module">
+    import { renderSiteNav } from "/platform/lib/site-nav.js";
+    renderSiteNav(document.getElementById("site-nav-inline"));
+    document.getElementById("footer-year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>

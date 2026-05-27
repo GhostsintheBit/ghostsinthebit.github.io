@@ -1,0 +1,88 @@
+{
+  "id": "02-logged-in-mobile-scrape",
+  "title": "Logged-In Mobile API Abuse",
+  "difficulty": "intermediate",
+  "category": "scraping",
+  "estimated_minutes": 60,
+  "short_description": "A partner reported potential automated scraping against m.phantomfeed.io. You have three days of authenticated HTTP traffic (~300K requests). Identify the bad actor and explain what they're doing. Suspicious traffic is not labeled.",
+  "data": "data.db.gz",
+  "primary_table": "phantomfeed_logs_logged_in",
+  "indexes": [
+    "timestamp",
+    "IP",
+    "ASN",
+    "JA4",
+    "userID",
+    "uri",
+    "responseCode"
+  ],
+  "instructions": "instructions.html",
+  "schema_hints": {
+    "timestamp": "ISO-8601 request time. Useful for rate-per-minute analysis.",
+    "uri": "Full request URI. Endpoint templates reveal enumeration patterns.",
+    "userID": "Authenticated user. Same user across many IPs = suspect.",
+    "IP": "Source IP. Per-IP volume + geographic spread.",
+    "ASN": "Autonomous System. Datacenter ASNs vs residential carriers.",
+    "requestHeaders": "Serialized JSON of headers. Order and casing matter.",
+    "requestCookieNames": "Comma-separated cookie name list. Missing _fbp/csrftoken = unusual.",
+    "JA4": "TLS client fingerprint. Same JA4 across many IPs is a strong signal.",
+    "userAgent": "Browser/app UA string. Spoofable but useful in combination.",
+    "parameters": "Query string parameters. Fixed parameters across IPs = enumeration.",
+    "responseCode": "HTTP status. High 200-rate on rare endpoints is suspicious.",
+    "responseContentSize": "Response body size. Large + repeated = data exfil pattern."
+  },
+  "hints": [
+    {
+      "label": "Start broad",
+      "text": "Begin with traffic volume. Count requests grouped by IP, ASN, JA4, and userID separately. What stands out at the top of each list?"
+    },
+    {
+      "label": "Look at endpoint targeting",
+      "text": "Suspicious traffic usually concentrates on a narrow set of endpoints. Count requests per URI and filter to high-volume URIs only. What's being hit hardest?"
+    },
+    {
+      "label": "Cross-pivot signals",
+      "text": "Once you find a suspicious endpoint, look at the distribution of JA4 fingerprints, user agents, and ASNs hitting it. Are they uniform (suspicious) or diverse (likely legit)?"
+    },
+    {
+      "label": "Confirm the enumeration",
+      "text": "Real scrapers walk a predictable parameter or path space. Look at parameters and URI templates for the suspect cluster \u2014 are they fetching userID 1, 2, 3, ... or a date range, etc.?"
+    },
+    {
+      "label": "Defensible conclusion",
+      "text": "A good finding combines: (1) what is being targeted, (2) who is doing it, (3) how (signals proving automation), (4) impact estimate (volume + response sizes), (5) mitigation suggestion (rate limit, JA4 block, etc.)."
+    }
+  ],
+  "sample_queries": [
+    {
+      "title": "Top IPs by request volume",
+      "description": "Quick baseline of who's hitting hardest.",
+      "sql": "SELECT IP, COUNT(*) AS hits\nFROM phantomfeed_logs_logged_in\nGROUP BY IP\nORDER BY hits DESC\nLIMIT 20"
+    },
+    {
+      "title": "Top JA4 fingerprints",
+      "description": "JA4 reuse across many IPs is a strong scraper signal.",
+      "sql": "SELECT JA4, COUNT(*) AS hits, COUNT(DISTINCT IP) AS unique_ips\nFROM phantomfeed_logs_logged_in\nGROUP BY JA4\nORDER BY hits DESC\nLIMIT 20"
+    },
+    {
+      "title": "Endpoint volume by URI template",
+      "description": "Normalize numeric segments to find templates being walked.",
+      "sql": "SELECT\n  CASE\n    WHEN uri LIKE '%/users/%/profile' THEN '/users/<id>/profile'\n    WHEN uri LIKE '%/api/v1/posts/create' THEN '/api/v1/posts/create'\n    WHEN uri LIKE '%/api/v1/posts/%' THEN '/api/v1/posts/<id>'\n    WHEN uri LIKE '%/groups/%/followers' THEN '/groups/<id>/followers'\n    WHEN uri LIKE '%/groups/%/posts' THEN '/groups/<id>/posts'\n    WHEN uri LIKE '%/pages/%/posts' THEN '/pages/<id>/posts'\n    WHEN uri LIKE '%/pages/%/followers' THEN '/pages/<id>/followers'\n    WHEN uri LIKE '%/partners/insights/%' THEN '/partners/insights/<path>'\n    ELSE 'other'\n  END AS template,\n  COUNT(*) AS hits\nFROM phantomfeed_logs_logged_in\nGROUP BY template\nORDER BY hits DESC\nLIMIT 30"
+    },
+    {
+      "title": "ASN distribution",
+      "description": "Datacenter ASNs (e.g., AS13335, AS14061, AS15169, AS16509) showing up at meaningful volume in authenticated mobile traffic is unusual.",
+      "sql": "SELECT ASN, COUNT(*) AS hits, COUNT(DISTINCT IP) AS unique_ips, COUNT(DISTINCT userID) AS unique_users\nFROM phantomfeed_logs_logged_in\nGROUP BY ASN\nORDER BY hits DESC\nLIMIT 20"
+    },
+    {
+      "title": "User \u2192 IP fanout",
+      "description": "One userID across many IPs/ASNs in a single day is suspicious.",
+      "sql": "SELECT userID, COUNT(DISTINCT IP) AS ips, COUNT(DISTINCT ASN) AS asns, COUNT(*) AS hits\nFROM phantomfeed_logs_logged_in\nGROUP BY userID\nORDER BY ips DESC\nLIMIT 20"
+    },
+    {
+      "title": "200-rate by JA4",
+      "description": "Scrapers that work cleanly have suspiciously high success rates on narrow endpoints.",
+      "sql": "SELECT\n  JA4,\n  COUNT(*) AS hits,\n  SUM(CASE WHEN responseCode = 200 THEN 1 ELSE 0 END) AS ok,\n  ROUND(100.0 * SUM(CASE WHEN responseCode = 200 THEN 1 ELSE 0 END) / COUNT(*), 1) AS pct_200\nFROM phantomfeed_logs_logged_in\nGROUP BY JA4\nHAVING hits > 100\nORDER BY hits DESC\nLIMIT 20"
+    }
+  ]
+}

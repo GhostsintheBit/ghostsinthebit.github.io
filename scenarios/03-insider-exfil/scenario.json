@@ -1,0 +1,82 @@
+{
+  "id": "03-insider-exfil",
+  "title": "Insider \u2014 Credentialed Data Exfiltration",
+  "difficulty": "intermediate",
+  "category": "insider threat",
+  "estimated_minutes": 75,
+  "short_description": "An internal SOC tip suggests an employee may be exfiltrating data before leaving for a competitor. You have 60 days of authenticated traffic against internal admin and data-science endpoints across five related tables. Find the actor by detecting deviation from their own baseline, while ruling out a documented role-change and a PTO catch-up.",
+  "data": "data.db.gz",
+  "primary_table": "access_logs",
+  "indexes": [
+    "emp_id",
+    "endpoint_path",
+    "client_kind",
+    "sensitivity",
+    "endpoint_category"
+  ],
+  "instructions": "instructions.html",
+  "schema_hints": {
+    "timestamp": "ISO-8601 request time. Use julianday() or substr(timestamp,1,10) for day-bucketing.",
+    "endpoint_path": "Internal endpoint hit. JOIN to data_classification or endpoints to enrich.",
+    "emp_id": "Employee identifier. JOIN to employees to see name, team, role, and status_notes (which documents PTO and role changes).",
+    "ip": "Source IP. 10.42.x.x = corporate office. 10.99.x.x = VPN (work-from-home or evening).",
+    "ja4": "TLS client fingerprint. Two values appear here: one for the sanctioned admin UI (browser) and one for raw curl. A switch from one to the other on the same employee is a strong signal.",
+    "client_kind": "Pre-classified client type: admin_ui (browser), internal_cli (sanctioned tool), curl (anomalous).",
+    "response_bytes": "Response body size. Order-of-magnitude jumps in mean response size per employee are highly suspect.",
+    "sensitivity": "Inherited from data_classification: public, internal, confidential, restricted."
+  },
+  "hints": [
+    {
+      "label": "Build a baseline per employee",
+      "text": "Don't compare employees to each other \u2014 compare each employee to their own first-30-days behavior. Mean response_bytes, top endpoints, client_kind distribution, hour-of-day distribution. Pick the metrics first."
+    },
+    {
+      "label": "Detect anomalies within the baseline",
+      "text": "For each employee, compute their week-1-to-week-4 baseline. Then check weeks 7-9 against it. Order-of-magnitude jumps in any single metric should be a flag. Don't trust just one metric \u2014 look for multiple metrics changing together."
+    },
+    {
+      "label": "Rule out the documented changes",
+      "text": "Two employees will trip alerts that are not exfiltration. Check the employees.status_notes column \u2014 role changes and PTO are documented. If status_notes explains the anomaly, file it under 'reviewed and dismissed'."
+    },
+    {
+      "label": "Confirm with the join",
+      "text": "Once you have a candidate, JOIN access_logs to data_classification on endpoint_path. What's the sensitivity distribution of their late-window traffic vs early? Confidential and restricted endpoints showing up where they didn't before is a real signal."
+    },
+    {
+      "label": "Quantify the exfil",
+      "text": "Sum response_bytes for the suspect employee filtered to export endpoints in the late window. That's the lower-bound estimate of data taken. Convert to MB or GB for the report."
+    }
+  ],
+  "sample_queries": [
+    {
+      "title": "Per-employee weekly response_bytes",
+      "description": "Bucket each employee's mean response size by week. The exfil actor will jump an order of magnitude.",
+      "sql": "SELECT\n  emp_id,\n  CAST((julianday(timestamp) - julianday('2026-01-01')) / 7 AS INTEGER) AS week,\n  ROUND(AVG(response_bytes) / 1024.0, 1) AS mean_KB,\n  COUNT(*) AS hits\nFROM access_logs\nGROUP BY emp_id, week\nORDER BY emp_id, week"
+    },
+    {
+      "title": "Late-window heavy hitters",
+      "description": "Total bytes per employee in the last 15 days. Outlier = lead.",
+      "sql": "SELECT\n  emp_id,\n  ROUND(SUM(response_bytes) / 1024.0 / 1024.0, 1) AS total_MB,\n  COUNT(*) AS hits\nFROM access_logs\nWHERE timestamp >= '2026-02-16'\nGROUP BY emp_id\nORDER BY total_MB DESC\nLIMIT 15"
+    },
+    {
+      "title": "Cross-reference with employees and status notes",
+      "description": "Join to see if the anomaly is documented (role change, PTO).",
+      "sql": "SELECT\n  al.emp_id, e.name, e.team, e.role, e.status_notes,\n  ROUND(SUM(al.response_bytes) / 1024.0 / 1024.0, 1) AS total_MB,\n  COUNT(*) AS hits\nFROM access_logs al\nJOIN employees e ON al.emp_id = e.emp_id\nWHERE al.timestamp >= '2026-02-16'\nGROUP BY al.emp_id\nORDER BY total_MB DESC\nLIMIT 10"
+    },
+    {
+      "title": "Client-kind change within a single employee",
+      "description": "Did anyone shift from the admin UI to raw curl? That alone is suspicious.",
+      "sql": "SELECT\n  emp_id,\n  client_kind,\n  COUNT(*) AS hits,\n  MIN(timestamp) AS first_seen,\n  MAX(timestamp) AS last_seen\nFROM access_logs\nWHERE client_kind = 'curl'\nGROUP BY emp_id, client_kind\nORDER BY hits DESC"
+    },
+    {
+      "title": "Time-of-day shift",
+      "description": "Per-employee hour-of-day histogram. Normal workers cluster 9-18. Night-shift behavior is anomalous.",
+      "sql": "SELECT\n  emp_id,\n  CAST(substr(timestamp, 12, 2) AS INTEGER) AS hour,\n  COUNT(*) AS hits\nFROM access_logs\nWHERE emp_id IN ('emp_034', 'emp_011', 'emp_022')\nGROUP BY emp_id, hour\nORDER BY emp_id, hour"
+    },
+    {
+      "title": "Sensitivity-classified pull",
+      "description": "Join to data_classification. Restricted/confidential bytes per employee in the late window.",
+      "sql": "SELECT\n  al.emp_id, e.name, e.team,\n  dc.sensitivity,\n  ROUND(SUM(al.response_bytes) / 1024.0 / 1024.0, 1) AS MB,\n  COUNT(*) AS hits\nFROM access_logs al\nJOIN employees e ON al.emp_id = e.emp_id\nJOIN data_classification dc ON al.endpoint_path = dc.endpoint_path\nWHERE dc.sensitivity IN ('restricted', 'confidential')\n  AND al.timestamp >= '2026-02-16'\nGROUP BY al.emp_id, dc.sensitivity\nORDER BY MB DESC\nLIMIT 20"
+    }
+  ]
+}

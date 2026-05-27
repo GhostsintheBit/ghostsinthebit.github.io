@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bots and Scrapers: Motivations, Tactics, and Defenses — Ghost in the Bit</title>
+  <meta name="description" content="A field guide to who runs scraping operations, what they're after, and what realistic defenses look like." />
+  <link rel="icon" type="image/x-icon" href="/images/favicons/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicons/favicon-16x16.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicons/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/images/favicons/favicon-192x192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicons/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <link rel="stylesheet" href="/platform/styles/core.css" />
+</head>
+<body>
+  <header class="site-header">
+    <a href="/" class="brand"><span class="brand-mark">◯</span><span class="brand-name">Ghost in the Bit</span></a>
+    <nav class="site-nav-inline" id="site-nav-inline"></nav>
+  </header>
+
+  <main class="article">
+    <header class="article-header">
+      <h1 class="article-title">Bots and Scrapers: Motivations, Tactics, and Defenses</h1>
+      <div class="article-meta">
+        <span class="category-pill">scraping</span>
+        <span>Long read</span>
+      </div>
+    </header>
+
+    <h2>Bots and scrapers, a quick intro</h2>
+    <p>Bots and scrapers play a much bigger role online than most people realize. some of them keep the web running smoothly, others cause real problems for platforms and the people using them. I wanted to walk through what they actually do, why they exist, and what you can do to understand them and defend against them, mostly so the writeup I would have wanted years ago is out there. This is just me sharing what I have picked up along the way.</p>
+
+    <h2>Understanding bots and scrapers</h2>
+    <p>Bots are automated programs that interact with websites or applications. Some of them perform helpful tasks and take work off our hands. Others pretend to be real people or use automation in ways that create problems. Scrapers focus on collecting information by pulling data from a site piece by piece. Sometimes this is done for legitimate reasons. Other times it is used to gather large amounts of data without permission or control.</p>
+    <p>Many bots are designed to copy human behavior closely enough to blend in, making them difficult to spot. Scrapers tend to be quieter but persistent, slowly gathering the information they are after. While their goals differ, both rely on finding weak points in systems, and that is where the trouble usually begins.</p>
+
+    <h2>Motives and tactics</h2>
+    <p>The reasons behind bot activity vary widely. Some bots spread unwanted messages or try to influence how people think. Others aim to trick users, gather sensitive information, or take advantage of system features. Scrapers often collect data for research, monitoring, or analysis. But they can also be used for large scale data harvesting, copying entire profiles or sets of content.</p>
+    <p>The tactics used by both are constantly evolving. Bots may rotate user agents or IP addresses to avoid detection. Scrapers may carefully time their requests to stay under rate limits. When these two tools work together, they can create an even larger impact than either would on its own.</p>
+
+    <h2>Combining forces for greater impact</h2>
+    <p>One of the more concerning situations is when bots and scrapers support each other. For example, a scraper might collect user data and pass it to a bot that then spreads messages pretending to be real people. This type of pairing can mislead users, damage trust, and weaken the overall safety of a platform. When left unchecked, it becomes difficult to know what is genuine and what is part of a coordinated effort.</p>
+
+    <h2>A generic social media app</h2>
+    <p>To help demonstrate how these issues can appear in real systems, I created a simple GraphQL-based application that mimics a small social media platform. It generates sample users, posts, and interactions. The point of the exercise is to show where things can go wrong and how vulnerabilities can appear in ways that may not be obvious at first glance.</p>
+
+    <pre><code># [truncated]
+def validate_access_key(access_key):
+    return access_key == "valid_access_key"
+# [truncated]</code></pre>
+
+    <p>This function checks if the incoming request provided a matching access key. It is intentionally simple for demonstration purposes.</p>
+
+    <pre><code># [truncated]
+access_key = info.context.get('access_key')
+if access_key != self.access_key:
+    raise Exception("Access denied")
+# [truncated]</code></pre>
+
+    <p>Each resolver checks the provided key before returning data. In a real application you would obviously want stronger checks than this, but for the demo it shows how easily things can break if the checks are skipped or applied inconsistently.</p>
+
+    <p>In this example, user 8 corresponds to James Martinez, which we can see by running a simple GraphQL query.</p>
+
+    <h3>Request</h3>
+    <pre><code>curl -X POST -H "Content-Type: application/json" \
+     -H "Access-Key: 50441f01-8b54-4ea1-a0c1-88c02dd97bc0" \
+     --data '{"query": "{ user(id: 8) { id name } }"}' \
+     http://localhost:5000/graphql</code></pre>
+
+    <h3>Response</h3>
+    <pre><code>{
+  "data": {
+    "user": {
+      "id": "VXNlcjo4",
+      "name": "James Martinez"
+    }
+  }
+}</code></pre>
+
+    <p>If the same user tries to view another user's private information, the system correctly denies access. This is what we expect and want to see.</p>
+
+    <h3>Request</h3>
+    <pre><code>curl -X POST -H "Content-Type: application/json" \
+     -H "Access-Key: 50441f01-8b54-4ea1-a0c1-88c02dd97bc0" \
+     --data '{"query": "{ user(id: 9) { id name email posts (limit:2) { id title content } } }"}' \
+     http://localhost:5000/graphql</code></pre>
+
+    <h3>Response</h3>
+    <pre><code>{
+  "data": { "user": null },
+  "errors": [
+    { "message": "Access denied: Invalid access key", "path": ["user"] }
+  ]
+}</code></pre>
+
+    <p>Now that we understand the intended behavior, we can look at the vulnerable portions of the application. These were added on purpose to show how easily a small oversight can create an opening.</p>
+
+    <p>The issues appear in the <code>resolve_posts</code> and <code>resolve_user</code> methods within the User class. Here is a portion of the code:</p>
+
+    <pre><code># [truncated]
+def resolve_posts(self, info, limit=None):
+    session = info.context.get('session')
+    query = session.query(PostModel).filter_by(user_id=self.id)
+    if limit is not None:
+        query = query.limit(limit)
+    return query.all()
+# [truncated]
+def resolve_user(self, info, id):
+    access_key = info.context.get('access_key')
+# [truncated]</code></pre>
+
+    <p>The key check is missing here. Because of that, any user can request another user's posts, comments, or profile data. That is exactly what a scraper looks for, especially if the goal is to collect as much data as possible while pretending to be different users.</p>
+
+    <p>If we repeat the earlier request, the server now returns user 9's information without complaint. With the access-control gap in place, the response includes name, email, and posts for the targeted user. That is exactly the kind of oversight scrapers thrive on. With this opening it becomes very easy to gather information in bulk, especially if combined with automation.</p>
+
+    <p>From here, it is not difficult to imagine a scraper gathering access keys and turning them over to a bot that then spreads unwanted content by posting as real users.</p>
+
+    <pre><code># [truncated]
+def send_request(user_id, lock, responses):
+    graphql_query = {"query": "{ user(id: %d) { id name email accessKey } }" % user_id}
+    headers = {
+        "Content-Type": "application/json",
+        "Access-Key": access_key,
+    }
+    response = requests.post(graphql_url, json=graphql_query, headers=headers)
+    if response.status_code == 200 and response.json().get("data"):
+# [truncated]</code></pre>
+
+    <p>Below is a sample of the output from a simple scraping loop that gathers user data. This is the kind of information a bot can later misuse.</p>
+
+    <h3>Scrape output</h3>
+    <pre><code>Response for user ID 1:
+{"data": {"user": {"accessKey": "97c9ea8c-...", "email": "john@example.com", "name": "John Doe"}}}
+Response for user ID 2:
+{"data": {"user": {"accessKey": "f4a67797-...", "email": "jane@example.com", "name": "Jane Smith"}}}
+Response for user ID 3:
+{"data": {"user": {"accessKey": "27a8b14e-...", "email": "alice@example.com", "name": "Alice Johnson"}}}
+...
+[truncated]</code></pre>
+
+    <p>Using the gathered keys, a bot can now post messages as if it were the real user, which is a real concern for any platform.</p>
+
+    <pre><code>access_keys = ["50441f01-...", "27a8b14e-...", "59d73e34-...", ...]
+
+def send_request(access_key):
+    mutation_query = '''
+    mutation {
+      createPost(title: "Bot Post by James",
+                 content: "Check out this totally safe link!! www.thisismalware.com") {
+        post { id }
+      }
+    }
+    '''
+    # ... send with access_key in headers ...
+    print(f"key:{access_key} post successful | id:{post_id}")</code></pre>
+
+    <p>The bot script cycles through each access key and posts as the user tied to that key. This is how a simple oversight can quickly spiral into something much larger in a real-world environment.</p>
+
+    <pre><code>key:c6790640-... post successful | id:UG9zdDo1MQ==
+key:59d73e34-... post successful | id:UG9zdDo1Mw==
+key:8968c9e0-... post successful | id:UG9zdDo1Mg==
+key:f4a67797-... post successful | id:UG9zdDo1NA==
+key:50441f01-... post successful | id:UG9zdDo1NQ==
+...</code></pre>
+
+    <p>Querying those posts shows the bot activity clearly. It has posted as multiple users and each post carries the same message — a textbook spam-by-impersonation pattern, surfacing from the same scrape-then-replay pipeline.</p>
+
+    <p>This entire example is meant to show how small gaps in logic can grow into real issues. Even simple oversights can make it far too easy for bots and scrapers to abuse a system. The more we understand how they work, the better equipped we are to recognize warning signs and strengthen the systems we build.</p>
+
+    <h2>Working toward better defenses</h2>
+    <p>Keeping bots and scrapers in check requires continuous attention and patience. Good access control, proper rate limiting, careful validation, and regular code reviews all play an important role. Monitoring patterns and user behavior can also help catch unusual activity before it grows too large. It will always be a balancing act, but staying aware and adapting as tactics evolve is key.</p>
+
+    <p>I hope this breakdown offered some helpful insight. The more we share what we learn, the stronger our collective defenses become.</p>
+
+    <p style="margin-top: 32px;">
+      Want to explore the code and try it out yourself? Visit the
+      <a href="https://github.com/GhostsintheBit/generic_socialMedia" target="_blank" rel="noopener">generic_socialMedia repo on GitHub</a>.
+    </p>
+    <div class="newsletter-cta inline">
+      <h2 class="newsletter-cta-heading">Liked this?</h2>
+      <p class="newsletter-cta-sub">
+        I write one of these a month. Drop your email below to get new posts
+        and scenarios in your inbox. No spam.
+      </p>
+      <form
+        action="https://buttondown.com/api/emails/embed-subscribe/ghostinthebit"
+        method="post"
+        class="embeddable-buttondown-form"
+        target="popupwindow"
+      >
+        <label for="bd-email">Enter your email</label>
+        <input type="email" name="email" id="bd-email" placeholder="your@email.com" required />
+        <input type="submit" value="Subscribe" />
+        <p>
+          <a href="https://buttondown.com/refer/ghostinthebit" target="_blank" rel="noopener">
+            Powered by Buttondown.
+          </a>
+        </p>
+      </form>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p><span id="footer-year"></span> · Ghost in the Bit</p>
+  </footer>
+  <script type="module">
+    import { renderSiteNav } from "/platform/lib/site-nav.js";
+    renderSiteNav(document.getElementById("site-nav-inline"), "blog");
+    document.getElementById("footer-year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>

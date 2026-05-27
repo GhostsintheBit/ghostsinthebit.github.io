@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>A Tale of Tokens, Cookies, and Curious Behaviors — Ghost in the Bit</title>
+  <meta name="description" content="A mobile-API rate limit that reset itself once a generic cookie was added to the request." />
+  <link rel="icon" type="image/x-icon" href="/images/favicons/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicons/favicon-16x16.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicons/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/images/favicons/favicon-192x192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicons/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <link rel="stylesheet" href="/platform/styles/core.css" />
+</head>
+<body>
+  <header class="site-header">
+    <a href="/" class="brand"><span class="brand-mark">◯</span><span class="brand-name">Ghost in the Bit</span></a>
+    <nav class="site-nav-inline" id="site-nav-inline"></nav>
+  </header>
+
+  <main class="article">
+    <header class="article-header">
+      <h1 class="article-title">A Tale of Tokens, Cookies, and Curious Behaviors</h1>
+      <div class="article-meta">
+        <span class="category-pill">rate limits</span>
+        <span>Bypass</span>
+      </div>
+    </header>
+
+    <h2>Finding a rate limit bypass with cookies</h2>
+    <p>While doing penetration testing for a large tech company, I ran into a behavior that caught my attention. The mobile API endpoints were protected with OAuth tokens, which is standard practice for modern APIs. Each request needed a valid token, and there was a rate limit to keep traffic under control. On paper everything sounded straightforward.</p>
+    <p>In practice, I noticed that after hitting the rate limit, I could add a cookie header with a simple flag and an arbitrary value and suddenly the system would let me send more requests again. The token still had to be valid for this to work. The cookie did not have to match a real user session. It just needed to exist in the request in a way the server accepted as a cookie.</p>
+
+    <h3>How the behavior showed up</h3>
+    <p>Under normal conditions, once I reached the set limit, further requests using the same token were blocked until the limit reset. That part was expected and lined up with the design. But when I sent the same requests with the same valid token and added a generic session cookie, the server allowed an additional series of calls. It felt as if the presence of the cookie placed the request into a slightly different path in the handling logic.</p>
+
+    <h3>Some possible explanations</h3>
+    <p>I did not have access to the internal code or configuration, so I can not say with certainty what was happening. I can only share some ideas that fit the behavior I observed based on past experience.</p>
+    <ol>
+      <li><strong>Separate tracking for token and session.</strong> OAuth tokens and cookies often serve different purposes. Tokens authenticate the caller, and cookies often track session state. If the system tracks rate limits separately for these two concepts and does not fully align them, then adding a cookie could cause the server to treat the request as coming from a different context.</li>
+      <li><strong>Mismatched scopes for rate limits.</strong> It is possible that the backend uses one scope for limits based on tokens and a different scope for session cookies. If those scopes are not unified, a request that includes both might be counted differently from a token-only request. That would explain why the limit felt like it reset once the cookie appeared.</li>
+      <li><strong>Extra logic triggered by cookies.</strong> Adding a cookie can cause the server to run additional logic that was originally designed for web clients. If that path uses different rules for limits or has looser controls, it could unintentionally allow more traffic than the mobile API path alone.</li>
+      <li><strong>How the rate limit key is built.</strong> Many rate limit systems build their keys using combinations of headers such as tokens, IP addresses, and cookies. If adding a cookie changes the key, then the server may believe it is seeing traffic from a new source and start counting again from zero.</li>
+    </ol>
+
+    <h3>Why this matters in real use</h3>
+    <p>Even though I can not prove the exact cause without seeing the backend, the outcome is still important. Any time two different ways of tracking identity or sessions are combined, there is a risk that the system will treat them as more separate than intended. That opens the door for people to send more traffic than the original limits were meant to allow.</p>
+    <p>In a real environment, this kind of behavior can support scraping, automated abuse, or just more pressure on backend services than the team expects. That is why small details around how tokens and cookies are handled together deserve attention.</p>
+
+    <h3>Looking back on the finding</h3>
+    <p>I do not view this as a simple failure or oversight by the team that built the system. These are the kinds of interactions that are easy to miss when features are added over time and different pieces of authentication logic grow alongside each other. Tokens and cookies each make sense on their own, but when they overlap in ways no one explicitly designed for, you get behavior like this.</p>
+    <p>When I reported this, my goal was to give the team one more signal to help them tighten the relationship between their different authentication paths, and to make sure that rate limits apply consistently regardless of how a client chooses to send its session information. Small adjustments here can go a long way toward keeping systems and users better protected.</p>
+
+    <h3>The mind map</h3>
+    <p>While testing I built a mind map of the questions I asked along the way and the branches I followed before landing on this behavior.</p>
+    <img src="/images/mind_map_cookie_and_token_research.png" alt="Mind map of cookie and token research" style="border: 1px solid var(--border-soft); border-radius: var(--radius-2); margin: 16px 0;" />
+    <div class="newsletter-cta inline">
+      <h2 class="newsletter-cta-heading">Liked this?</h2>
+      <p class="newsletter-cta-sub">
+        I write one of these a month. Drop your email below to get new posts
+        and scenarios in your inbox. No spam.
+      </p>
+      <form
+        action="https://buttondown.com/api/emails/embed-subscribe/ghostinthebit"
+        method="post"
+        class="embeddable-buttondown-form"
+        target="popupwindow"
+      >
+        <label for="bd-email">Enter your email</label>
+        <input type="email" name="email" id="bd-email" placeholder="your@email.com" required />
+        <input type="submit" value="Subscribe" />
+        <p>
+          <a href="https://buttondown.com/refer/ghostinthebit" target="_blank" rel="noopener">
+            Powered by Buttondown.
+          </a>
+        </p>
+      </form>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p><span id="footer-year"></span> · Ghost in the Bit</p>
+  </footer>
+  <script type="module">
+    import { renderSiteNav } from "/platform/lib/site-nav.js";
+    renderSiteNav(document.getElementById("site-nav-inline"), "blog");
+    document.getElementById("footer-year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>

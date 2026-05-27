@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>A Practical Look at Scraping Behavior — Ghost in the Bit</title>
+  <meta name="description" content="How sophisticated scrapers shape their traffic to blend in, and what behavioral signals still betray them when you stack signals correctly." />
+  <link rel="icon" type="image/x-icon" href="/images/favicons/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicons/favicon-16x16.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicons/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/images/favicons/favicon-192x192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicons/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <link rel="stylesheet" href="/platform/styles/core.css" />
+  <style>
+    .article figure { margin: 24px 0; text-align: center; }
+    .article figure img {
+      max-width: 100%;
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-2);
+      margin: 0 auto;
+    }
+    .article figcaption {
+      margin-top: 8px;
+      font-size: 0.82rem;
+      color: var(--text-3);
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <a href="/" class="brand"><span class="brand-mark">◯</span><span class="brand-name">Ghost in the Bit</span></a>
+    <nav class="site-nav-inline" id="site-nav-inline"></nav>
+  </header>
+
+  <main class="article">
+    <header class="article-header">
+      <h1 class="article-title">A Practical Look at Scraping Behavior</h1>
+      <div class="article-meta">
+        <span class="category-pill">scraping</span>
+        <span>Long read</span>
+      </div>
+    </header>
+
+    <h2>Seeing scraping through traffic behavior</h2>
+    <p>
+      Scraping covers a wide range of behaviors. Some actors rely on simple
+      tools that are blocked quickly and never become part of any meaningful
+      investigation. Others invest more time and skill into staying quiet,
+      blending in, rotating infrastructure, and shaping their traffic so it
+      does not raise obvious alarms. This post focuses on the second group.
+      These are the scrapers that are not immediately blocked, the ones that
+      move carefully, and the ones whose activity you really have to study
+      to understand.
+    </p>
+    <p>
+      Scraping is often described as a basic interaction repeated many
+      times, but the more advanced operators treat it as an entire workflow.
+      They run their tools across rotating IPs, consistent client
+      fingerprints, predictable patterns, and controlled timing. When you
+      investigate these actors, you are not catching a single request. You
+      are learning to see the underlying behavior that continues long after
+      the first request is made.
+    </p>
+    <p>
+      The goal in investigations like this is not to rely on one signal or
+      one detection trick. It is to understand the overall behavior well
+      enough that scraping reveals itself through the way it moves through
+      the platform. Once you start to recognize these patterns, even the
+      more sophisticated operators become easier to spot.
+    </p>
+    <p>
+      I want to walk through how I think about this work. It is not a strict
+      recipe. It is a way of exploring a dataset to understand what is
+      normal, what is unusual, and what is quietly persistent underneath
+      everything else.
+    </p>
+
+    <h3>Start with the rhythm of the dataset</h3>
+    <p>
+      Before looking at anything specific, I always take a step back and
+      look at the rhythm of the traffic. Every platform has its own feel.
+      When the traffic is healthy, most responses look clean. You see a
+      large portion of successful responses and a smaller portion of natural
+      errors. You also see differences in response sizes that match the type
+      of content being served.
+    </p>
+    <p>
+      The reason I start here is simple. Scraping rarely introduces strange
+      codes or dramatic errors. The more capable actors do everything they
+      can to avoid problems. They tune their tools to stay within limits.
+      They adjust timing based on responses. They run with fewer mistakes
+      because mistakes slow them down.
+    </p>
+    <p>When the global view makes sense, I know I can trust the rest of the dataset.</p>
+
+    <h3>Understand where the traffic flows</h3>
+    <p>
+      Once the broad picture looks steady, I begin to look at what surfaces
+      are being hit. Most logged-out browsing spreads nicely across a
+      platform's offerings. The variety itself is a useful signal.
+    </p>
+
+    <figure>
+      <img src="/images/traffic_goes.png" alt="Distribution of where traffic flows across endpoints" />
+      <figcaption>Image from the <a href="/platform/console.html">Phantom Feed</a> simulated threat hunt. Not real user data.</figcaption>
+    </figure>
+
+    <p>
+      Scraping does not usually have that variety. It tends to focus on a
+      particular resource or a small group of them. Something like repeated
+      profile access or repeated content fetches without any of the natural
+      wandering you see in real users.
+    </p>
+    <p>
+      I never assume intent at this point. I am simply paying attention to
+      the shape of the traffic. If I see a client that does nothing but one
+      endpoint, that is worth remembering for later.
+    </p>
+
+    <h3>Get a sense of the clients themselves</h3>
+    <p>
+      This is where multiple signals start to come together. I do not rely
+      on one thing. A single client fingerprint is never enough. Instead, I
+      look at the full blend of evidence.
+    </p>
+    <p>
+      Browser-based fingerprints like JA4 help show me whether a request
+      looks like a real desktop browser, a mobile app, a script, or
+      something custom. Patterns in SSL/TLS can reveal how a client handles
+      handshakes, which versions it prefers, and how consistent it is across
+      connections. Real browsers have quirks that come from their underlying
+      libraries and update cycles. Automated actors often have a different
+      feel because their tooling stays fixed for long periods of time.
+    </p>
+
+    <figure>
+      <img src="/images/ja4_.png" alt="JA4 fingerprint distribution" />
+      <figcaption>Image from the <a href="/platform/console.html">Phantom Feed</a> simulated threat hunt. Not real user data.</figcaption>
+    </figure>
+
+    <p>
+      IP behavior also plays a role. In a normal dataset, you see a long
+      tail of low-volume IPs and a few that are busy because of families,
+      offices, or public networks. In scraping operations, the activity can
+      look entirely different. You might see dozens or hundreds of IPs
+      sharing the same client fingerprint. You might see a cluster of
+      addresses belonging to a particular hosting provider. You might see a
+      pattern where nothing stands out individually, but the combined
+      behavior clearly pushes past what a real user would do.
+    </p>
+    <p>I never draw conclusions here. I just gather signals and see which ones align.</p>
+
+    <h3>Look at how the clients handle volume and pressure</h3>
+    <p>
+      Real people do not browse with perfect timing or specific targets.
+      They pause, scroll, click around, and get distracted. Automated
+      scraping tools move with a different kind of precision. Their requests
+      arrive with smoother spacing, fewer natural mistakes, and more
+      predictable interactions with rate limits or friction points.
+    </p>
+    <p>
+      One of the more useful parts of this work is watching how a client
+      responds when the platform pushes back on them. Do they slow down. Do
+      they back off. Do they retry aggressively. Do they switch IPs. Do they
+      rotate certificates or JA4 settings. Do they adjust user agents. The
+      reaction is often more revealing than the request itself.
+    </p>
+    <p>
+      If an actor is rotating IPs very quickly, that usually tells you they
+      care about potentially hiding volume or bypassing security defenses.
+      If they keep the same fingerprint but spread the work across many
+      networks, that tells you they want consistency on the client side
+      while keeping the infrastructure fluid. When you combine these small
+      details, the behavior becomes clearer.
+    </p>
+
+    <figure>
+      <img src="/images/end_game.png" alt="Final view of the suspect cluster" />
+      <figcaption>Image from the <a href="/platform/console.html">Phantom Feed</a> simulated threat hunt. Not real user data.</figcaption>
+    </figure>
+
+    <h3>Bring the pieces together and look at the pattern as a whole</h3>
+    <p>
+      The most important part of a scraping investigation is understanding
+      that no single signal tells the entire story. You need to look at
+      everything together.
+    </p>
+    <ul>
+      <li>A suspicious fingerprint might not matter if the endpoint usage looks normal.</li>
+      <li>A large amount of traffic might not matter if the timing looks natural.</li>
+      <li>A cluster of hosting provider IPs might not matter if the success rate is low.</li>
+    </ul>
+    <p>
+      But when a single client fingerprint shows heavy usage on a limited
+      set of endpoints, across many IPs, with consistent SSL/TLS behavior,
+      and with clean response spikes after small amounts of failures dips,
+      you have a behavior that is no longer accidental. It is intentional,
+      structured, and consistent with automated collection.
+    </p>
+    <p>
+      Once you reach this view, you can tell the story in a way that is
+      supported by evidence. You can describe how the traffic flows, how the
+      client behaves, how the infrastructure rotates, and how the results
+      point toward scraping rather than normal browsing.
+    </p>
+
+    <h3>The value is in the behavior, not the individual requests</h3>
+    <p>
+      Scraping is not only a single event. Scraping is also patterns. It is
+      a style of movement within the traffic. It shows itself through
+      repetition, precision, and structure. You find scraping by
+      understanding the differences between natural human behavior and the
+      steady, deliberate steps of automation.
+    </p>
+    <p>
+      The more datasets you study, the easier it becomes to see the shape
+      underneath the noise. Over time, scraping stops looking like a mystery
+      and starts looking like a pattern in the traffic that reveals its own
+      story if you read it closely enough.
+    </p>
+
+    <p style="margin-top: 40px;">
+      <a class="primary-btn" href="/platform/console.html">Open the Phantom Feed console</a>
+      <a class="ghost-btn" href="/blog/">More posts</a>
+    </p>
+    <div class="newsletter-cta inline">
+      <h2 class="newsletter-cta-heading">Liked this?</h2>
+      <p class="newsletter-cta-sub">
+        I write one of these a month. Drop your email below to get new posts
+        and scenarios in your inbox. No spam.
+      </p>
+      <form
+        action="https://buttondown.com/api/emails/embed-subscribe/ghostinthebit"
+        method="post"
+        class="embeddable-buttondown-form"
+        target="popupwindow"
+      >
+        <label for="bd-email">Enter your email</label>
+        <input type="email" name="email" id="bd-email" placeholder="your@email.com" required />
+        <input type="submit" value="Subscribe" />
+        <p>
+          <a href="https://buttondown.com/refer/ghostinthebit" target="_blank" rel="noopener">
+            Powered by Buttondown.
+          </a>
+        </p>
+      </form>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p><span id="footer-year"></span> · Ghost in the Bit</p>
+  </footer>
+  <script type="module">
+    import { renderSiteNav } from "/platform/lib/site-nav.js";
+    renderSiteNav(document.getElementById("site-nav-inline"), "blog");
+    document.getElementById("footer-year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>

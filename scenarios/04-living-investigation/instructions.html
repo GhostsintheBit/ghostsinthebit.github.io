@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Instructions — The Living Investigation — Phantom Feed</title>
+  <link rel="icon" type="image/x-icon" href="/images/favicons/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicons/favicon-16x16.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicons/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/images/favicons/favicon-192x192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicons/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <link rel="stylesheet" href="/platform/styles/core.css" />
+</head>
+<body>
+  <header class="site-header">
+    <a href="/" class="brand"><span class="brand-mark">◯</span><span class="brand-name">Ghost in the Bit</span></a>
+    <nav class="site-nav-inline" id="site-nav-inline"></nav>
+  </header>
+
+  <main class="article">
+    <header class="article-header">
+      <h1 class="article-title">Scenario 04 — The Living Investigation</h1>
+      <div class="article-meta">
+        <span class="difficulty-pill" data-level="hard">hard</span>
+        <span class="category-pill">scraping</span>
+        <span>Estimated time: 120 min</span>
+      </div>
+    </header>
+
+    <h2>Scenario</h2>
+    <p>
+      Thirty days ago, Phantom Feed noticed automated activity against the
+      public profile endpoint <code>/api/v1/profiles/user_&lt;N&gt;</code>.
+      Over the course of the month, the security team deployed a series of
+      defenses. The attacker adapted. The team deployed again. The attacker
+      adapted again. By day 30, the attack is still going but at a fraction
+      of its peak.
+    </p>
+    <p>
+      Now the post-incident review is on your desk. You have 30 days of
+      access logs covering everything: legitimate user traffic, the attacker
+      at every phase, and every defensive response. Your job is to
+      reconstruct the timeline from the data alone.
+    </p>
+
+    <h2>Your goal</h2>
+    <p>
+      Produce a phase-by-phase reconstruction of the campaign that answers:
+    </p>
+    <ul>
+      <li>What did the attacker do first? When was the first defense deployed and what did it do?</li>
+      <li>How did the attacker bypass each defense? How long did each bypass take to deploy?</li>
+      <li>Which defenses were most disruptive (longest gap between defense and bypass)?</li>
+      <li>Which defenses were least disruptive (attacker had a workaround almost immediately)?</li>
+      <li>If Phantom Feed had to deploy <em>one</em> defense on day 1, which one would have been most effective long-term?</li>
+    </ul>
+    <p>
+      You should be able to name and describe every distinct phase, with the
+      SQL that proves each transition.
+    </p>
+
+    <h2>What you may assume</h2>
+    <ul>
+      <li>The target endpoint is <code>/api/v1/profiles/user_&lt;N&gt;</code>.</li>
+      <li>Background traffic is real users browsing the platform normally for the full 30 days.</li>
+      <li>The attacker is a single coordinated actor who adapts in response to defensive deployments.</li>
+      <li>The dataset includes a <code>phaseTag</code> column. Don't filter on it until you are checking your work — solve the investigation from the substantive columns first.</li>
+      <li>The base date is 2026-04-01. Day 0 in queries below means 2026-04-01.</li>
+    </ul>
+
+    <h2>The dataset</h2>
+    <p>
+      You are working with a single table named <code>access_logs</code>,
+      ~127,000 rows over 30 days. Click the <strong>Schema</strong> tab in
+      the sidebar to see all columns with column-level hints. Most relevant
+      columns:
+    </p>
+    <ul>
+      <li><code>timestamp</code> — for daily bucketing with <code>julianday()</code></li>
+      <li><code>uri</code> — the request path; filter to <code>/api/v1/profiles/%</code> for the target endpoint</li>
+      <li><code>ja4</code>, <code>userAgent</code> — for detecting tool switches</li>
+      <li><code>requestCookieNames</code> — for detecting cookie-presence defense and the bypass</li>
+      <li><code>responseCode</code> — for spotting when each defense fires (429 → 403 → 401)</li>
+      <li><code>userID</code> — '0' for unauthenticated; <code>user_900000+</code> is the attacker's first batch of fake accounts; <code>user_950000+</code> is the post-captcha batch</li>
+    </ul>
+
+    <h2>Tips</h2>
+    <ul>
+      <li>Bucket by day first. Bucket by day for every interesting metric. The timeline is the answer.</li>
+      <li>Reading the daily response-code distribution is the single highest-leverage query.</li>
+      <li>The <code>Sample queries</code> tab gives you starter queries that walk the reconstruction.</li>
+      <li>Once you have the timeline, write it up as a narrative. "On day X, defense Y was deployed. By day Z, the attacker had pivoted to Z'." That format is exactly what post-incident reviews look like.</li>
+    </ul>
+
+    <p style="margin-top: 32px;">
+      <a class="primary-btn" href="/platform/console.html?scenario=04-living-investigation">Open the console for this scenario</a>
+    </p>
+  </main>
+
+  <footer class="site-footer">
+    <p><span id="footer-year"></span> · Ghost in the Bit</p>
+  </footer>
+  <script type="module">
+    import { renderSiteNav } from "/platform/lib/site-nav.js";
+    renderSiteNav(document.getElementById("site-nav-inline"));
+    document.getElementById("footer-year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>

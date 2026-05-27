@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bypassing Rate Limits Using The Host Header — Ghost in the Bit</title>
+  <meta name="description" content="Two domains sharing one backend but tracking rate limits separately. A simple Host header swap multiplied the allowable request budget." />
+  <link rel="icon" type="image/x-icon" href="/images/favicons/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicons/favicon-16x16.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicons/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/images/favicons/favicon-192x192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicons/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <link rel="stylesheet" href="/platform/styles/core.css" />
+  <style>
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 0.92rem;
+    }
+    .data-table th, .data-table td {
+      text-align: left;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border-soft);
+    }
+    .data-table th {
+      background: var(--bg-2);
+      color: var(--text-1);
+      font-weight: 600;
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .data-table td { color: var(--text-1); }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <a href="/" class="brand"><span class="brand-mark">◯</span><span class="brand-name">Ghost in the Bit</span></a>
+    <nav class="site-nav-inline" id="site-nav-inline"></nav>
+  </header>
+
+  <main class="article">
+    <header class="article-header">
+      <h1 class="article-title">Bypassing Rate Limits Using The Host Header</h1>
+      <div class="article-meta">
+        <span class="category-pill">rate limits</span>
+        <span>Bypass</span>
+      </div>
+    </header>
+
+    <h2>How two domains opened the door</h2>
+    <p>During a round of testing on an API, I noticed something that did not quite line up with what I expected from the rate limiting in place. Two separate domains, <code>domain1[.]com</code> and <code>domain2[.]com</code>, both pointed to the same backend. Even though they shared the same infrastructure, they seemed to track rate limits separately. By changing the Host header between the two, I was able to send more requests than the system should have allowed.</p>
+
+    <p>A quick note before going further. Since testing is ongoing for this client, all names and values here are replaced with stand-in data.</p>
+
+    <h3>What I observed while testing</h3>
+    <p>When I sent repeated requests to <code>domain1[.]com/&lt;user&gt;/</code>, the system eventually started blocking me after roughly one thousand requests. That part made sense. What surprised me was that, if I then sent the same type of requests but changed the Host header to <code>domain2[.]com</code>, the server allowed another large batch of requests without complaint, even though both domains relied on the same backend.</p>
+
+    <p>To confirm they actually shared the same backend, I ran a few simple DNS lookups and checked the records:</p>
+    <pre><code>$ dig domain1.com +noall +answer
+domain1.com.     0       IN      CNAME   cname1.com.
+cname1.com.      0       IN      A       x.x.x.19
+
+$ dig domain2.com +noall +answer
+domain2.com.     0       IN      CNAME   cname1.com.
+cname1.com.      0       IN      A       x.x.x.19
+
+$ dig -x x.x.x.19 +noall +answer
+x.x.x.31.in-addr.arpa. 0     IN      PTR     PTR1.com.</code></pre>
+    <p>Both <code>domain1[.]com</code> and <code>domain2[.]com</code> resolved to the same IP address <code>x.x.x.19</code>. So while they looked like different entry points from the outside, behind the scenes they led to the same place.</p>
+
+    <h3>Numbers that tell the story</h3>
+    <p>To understand how much extra traffic this allowed, I recorded how many requests each domain would accept before the rate limit kicked in. The table below summarizes what I saw during testing:</p>
+    <table class="data-table">
+      <thead>
+        <tr><th>Endpoint</th><th>Host header</th><th>Requests before block</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Node (API)</td><td>domain1.com</td><td>1,138</td></tr>
+        <tr><td>Node (API)</td><td>domain2.com</td><td>1,098</td></tr>
+        <tr><td>Query (GraphQL)</td><td>domain1.com</td><td>3,570</td></tr>
+        <tr><td>Query (GraphQL)</td><td>domain2.com</td><td>3,808</td></tr>
+      </tbody>
+    </table>
+    <p>By swapping the Host header between <code>domain1[.]com</code> and <code>domain2[.]com</code>, I could almost double the amount of traffic I was able to send before running into any limits. For someone who wants to push a system hard, this is more than enough to matter.</p>
+
+    <h3>Why this behavior is concerning</h3>
+    <ul>
+      <li><strong>More effective scraping.</strong> If someone wants to scrape data, they can stretch out the limit simply by rotating through domains that share the same backend.</li>
+      <li><strong>Extra load on servers.</strong> Allowing more requests than expected can place additional stress on backend systems and introduce performance issues for real users.</li>
+      <li><strong>Gaps in detection.</strong> If monitoring and alerting rely heavily on rate limit triggers, this type of behavior might allow aggressive traffic to avoid drawing attention.</li>
+    </ul>
+
+    <h3>Some possible explanations</h3>
+    <ol>
+      <li><strong>Limits tracked per domain.</strong> The rate limiting logic may be using the value of the Host header as part of the key to track usage. If that is the case, each domain ends up with its own counter even though they share the same backend.</li>
+      <li><strong>Behavior at the load balancer or proxy.</strong> A load balancer or reverse proxy might be applying rate limits before traffic reaches the application. If limits are enforced per incoming domain rather than per shared backend, this behavior would make sense from the system's point of view.</li>
+      <li><strong>Separate contexts that do not talk to each other.</strong> It is also possible that the system maintains separate rate limit contexts for each domain for operational reasons, but did not fully account for the fact that some clients may be able to move between those domains easily.</li>
+    </ol>
+
+    <h3>What this tells us about design</h3>
+    <p>To me, this experience reinforces how important it is to think about limits from the perspective of the entire system, not just one entry point at a time. If multiple domains share the same backend, then rate limits ideally should reflect that shared reality. Otherwise, the system can end up with blind spots that are not obvious until someone actively tests for them.</p>
+
+    <h3>Closing thoughts</h3>
+    <p>I do not see this as a simple configuration mistake. Instead, it feels more like one of those subtle architectural gaps that only show up under specific conditions. It is the kind of thing that is easy to miss when adding new domains or adjusting traffic flows over time.</p>
+    <p>Finding and sharing issues like this is meant to help everyone involved. It gives the team a chance to adjust their protections so that limits are applied more consistently across the whole environment. In the long run that leads to a more reliable and resilient system for both users and operators.</p>
+
+    <h3>The mind map</h3>
+    <p>Here is the mind map I put together as I worked through this. Sometimes small details in headers tell you a lot.</p>
+    <img src="/images/header_swap_mind_map.png" alt="Mind map of host header rate limit behavior" style="border: 1px solid var(--border-soft); border-radius: var(--radius-2); margin: 16px 0;" />
+    <div class="newsletter-cta inline">
+      <h2 class="newsletter-cta-heading">Liked this?</h2>
+      <p class="newsletter-cta-sub">
+        I write one of these a month. Drop your email below to get new posts
+        and scenarios in your inbox. No spam.
+      </p>
+      <form
+        action="https://buttondown.com/api/emails/embed-subscribe/ghostinthebit"
+        method="post"
+        class="embeddable-buttondown-form"
+        target="popupwindow"
+      >
+        <label for="bd-email">Enter your email</label>
+        <input type="email" name="email" id="bd-email" placeholder="your@email.com" required />
+        <input type="submit" value="Subscribe" />
+        <p>
+          <a href="https://buttondown.com/refer/ghostinthebit" target="_blank" rel="noopener">
+            Powered by Buttondown.
+          </a>
+        </p>
+      </form>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p><span id="footer-year"></span> · Ghost in the Bit</p>
+  </footer>
+  <script type="module">
+    import { renderSiteNav } from "/platform/lib/site-nav.js";
+    renderSiteNav(document.getElementById("site-nav-inline"), "blog");
+    document.getElementById("footer-year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+{
+  "version": "1.1",
+  "scenarios": [
+    {
+      "id": "01-logged-out-scrape",
+      "title": "Logged-Out Web Scrape",
+      "difficulty": "beginner",
+      "category": "scraping",
+      "summary": "Unusual patterns in logged-out web traffic against web.phantomfeed.io. Determine if automated scraping is happening and identify the responsible clients.",
+      "estimated_minutes": 45
+    },
+    {
+      "id": "02-logged-in-mobile-scrape",
+      "title": "Logged-In Mobile API Abuse",
+      "difficulty": "intermediate",
+      "category": "scraping",
+      "summary": "A partner reported possible automated activity against m.phantomfeed.io. Authenticated traffic with mixed personas — find the bad actor and explain what they're doing.",
+      "estimated_minutes": 60
+    },
+    {
+      "id": "03-insider-exfil",
+      "title": "Insider — Credentialed Data Exfiltration",
+      "difficulty": "intermediate",
+      "category": "insider threat",
+      "summary": "An SOC tip suggests an employee may be exfiltrating data before leaving for a competitor. 60 days of authenticated traffic across five related tables. Detect deviation from baseline while ruling out documented role changes and PTO.",
+      "estimated_minutes": 75
+    },
+    {
+      "id": "04-living-investigation",
+      "title": "The Living Investigation — 30-Day Cat-and-Mouse",
+      "difficulty": "hard",
+      "category": "scraping",
+      "summary": "Thirty days of an evolving attack. Reconstruct eight distinct phases of attacker tactics and defensive responses from the logs alone. The capstone scenario.",
+      "estimated_minutes": 120
+    }
+  ]
+}

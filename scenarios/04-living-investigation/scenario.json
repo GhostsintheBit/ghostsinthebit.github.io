@@ -1,0 +1,91 @@
+{
+  "id": "04-living-investigation",
+  "title": "The Living Investigation \u2014 30-Day Cat-and-Mouse",
+  "difficulty": "hard",
+  "category": "scraping",
+  "estimated_minutes": 120,
+  "short_description": "30 days of logs. Day 1 looks normal. By day 30, you're seeing the aftermath of a sustained, adapting attack \u2014 with Phantom Feed's defenses deploying and the attacker pivoting in response. Reconstruct the full timeline: what was tried first, how each defense played out, how the attacker adapted, and which moves were most effective. The phaseTag column is provided to verify your reconstruction, but solve it without filtering on phaseTag first.",
+  "data": "data.db.gz",
+  "primary_table": "access_logs",
+  "indexes": [
+    "IP",
+    "ASN",
+    "ja4",
+    "userID",
+    "responseCode",
+    "endpointCategory"
+  ],
+  "instructions": "instructions.html",
+  "schema_hints": {
+    "timestamp": "ISO-8601 request time. Use julianday() or substr(timestamp,1,10) to bucket by day.",
+    "uri": "Full request URI. The target endpoint is /api/v1/profiles/user_<N>.",
+    "userID": "Authenticated user ID. '0' means unauthenticated. user_900000+ are the attacker's fake accounts. user_950000+ are post-CAPTCHA fake accounts.",
+    "IP": "Source IP. Prefix '5' = datacenter, prefix '7' = residential-proxy, prefix '1' = residential.",
+    "ASN": "Autonomous System. Cross-reference with known residential-proxy provider list.",
+    "ja4": "TLS client fingerprint. Watch this column change over time \u2014 that's the attacker switching tools.",
+    "userAgent": "Browser/tool UA string.",
+    "requestCookieNames": "Comma-separated cookie list. '' = no cookies. 'csrftoken,session_id' alone (missing _fbp and ab_test_bucket) is anomalous.",
+    "responseCode": "HTTP status. Watch the dominant code per day shift across the timeline.",
+    "responseBytes": "Response body size.",
+    "endpointCategory": "Pre-bucketed: user_browse, api_profile_lookup, account_register.",
+    "phaseTag": "For verification only \u2014 labels each attacker request with its phase. Try to solve without filtering on this column."
+  },
+  "hints": [
+    {
+      "label": "Bucket by day first",
+      "text": "Don't try to find the attacker in aggregate. Bucket every metric by day. The whole point of this scenario is that the timeline is the answer."
+    },
+    {
+      "label": "Daily response-code distribution",
+      "text": "GROUP BY day, responseCode and watch how the dominant code shifts. Spikes in 429 (rate limit), 403 (block), 401 (suspension) each mark a defensive deployment."
+    },
+    {
+      "label": "Find tool changes",
+      "text": "Count distinct (ja4, userAgent) tuples per day. The attacker swaps tools twice \u2014 once after a JA4 block, once they don't need to swap again."
+    },
+    {
+      "label": "Find the account-creation spike",
+      "text": "Search uri LIKE '%/accounts/register' and bucket by day. The phase boundaries become obvious."
+    },
+    {
+      "label": "Find the cookie-set anomaly",
+      "text": "Real users have requestCookieNames containing _fbp and ab_test_bucket. The attacker's fake accounts never do. That's the bypass-the-bypass moment."
+    },
+    {
+      "label": "Reason backwards from the dataset",
+      "text": "After you have the timeline, ask: how long did each defense stay effective? Which one took the most time for the attacker to bypass? Which one would have been most effective if deployed on day 1? That's the strategic conclusion."
+    }
+  ],
+  "sample_queries": [
+    {
+      "title": "Daily volume of attacker activity",
+      "description": "Total non-background rows per day. Shows the campaign's rhythm.",
+      "sql": "SELECT\n  CAST((julianday(timestamp) - julianday('2026-04-01')) AS INTEGER) AS day,\n  COUNT(*) AS rows\nFROM access_logs\nWHERE phaseTag != 'background'\nGROUP BY day\nORDER BY day"
+    },
+    {
+      "title": "Daily response-code mix",
+      "description": "Watch the dominant code change as defenses deploy and bypasses succeed.",
+      "sql": "SELECT\n  CAST((julianday(timestamp) - julianday('2026-04-01')) AS INTEGER) AS day,\n  responseCode, COUNT(*) AS hits\nFROM access_logs\nWHERE phaseTag != 'background'\nGROUP BY day, responseCode\nORDER BY day, responseCode"
+    },
+    {
+      "title": "Daily (JA4, userAgent) pairs hitting the target endpoint",
+      "description": "Tool switches show up here as new ja4 values entering the daily set.",
+      "sql": "SELECT\n  CAST((julianday(timestamp) - julianday('2026-04-01')) AS INTEGER) AS day,\n  ja4, userAgent, COUNT(*) AS hits\nFROM access_logs\nWHERE uri LIKE '%/api/v1/profiles/%'\n  AND phaseTag != 'background'\nGROUP BY day, ja4, userAgent\nORDER BY day, hits DESC"
+    },
+    {
+      "title": "Account creation rate per day",
+      "description": "Spike on day 18 marks the cookie-bypass-via-accounts phase. Cliff at day 21 marks the CAPTCHA.",
+      "sql": "SELECT\n  CAST((julianday(timestamp) - julianday('2026-04-01')) AS INTEGER) AS day,\n  responseCode, COUNT(*) AS hits\nFROM access_logs\nWHERE uri LIKE '%/accounts/register'\nGROUP BY day, responseCode\nORDER BY day, responseCode"
+    },
+    {
+      "title": "Cookie state per day on the target endpoint",
+      "description": "Shows when the attacker has no cookies vs the anomalous account-walk set.",
+      "sql": "SELECT\n  CAST((julianday(timestamp) - julianday('2026-04-01')) AS INTEGER) AS day,\n  requestCookieNames, COUNT(*) AS hits\nFROM access_logs\nWHERE uri LIKE '%/api/v1/profiles/%'\n  AND phaseTag != 'background'\nGROUP BY day, requestCookieNames\nORDER BY day, hits DESC"
+    },
+    {
+      "title": "ASN diversity of attacker requests per day",
+      "description": "Day 1-2: 1 datacenter ASN. Day 3+: 4+ residential-proxy ASNs.",
+      "sql": "SELECT\n  CAST((julianday(timestamp) - julianday('2026-04-01')) AS INTEGER) AS day,\n  COUNT(DISTINCT IP) AS unique_ips,\n  COUNT(DISTINCT ASN) AS unique_asns,\n  GROUP_CONCAT(DISTINCT ASN) AS asns\nFROM access_logs\nWHERE phaseTag != 'background'\nGROUP BY day\nORDER BY day"
+    }
+  ]
+}
