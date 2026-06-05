@@ -1,0 +1,90 @@
+{
+  "id": "01-logged-out-scrape",
+  "title": "Logged-Out Web Scrape",
+  "difficulty": "beginner",
+  "category": "scraping",
+  "estimated_minutes": 45,
+  "short_description": "Unusual patterns spotted in logged-out web traffic against web.phantomfeed.io. Determine whether automated scraping is occurring, identify the responsible clients, and explain what they are doing.",
+  "data": "data.db.gz",
+  "primary_table": "phantomfeed_logs_logged_out",
+  "indexes": [
+    "IP",
+    "ASN",
+    "JA4",
+    "userID",
+    "responseCode",
+    "authStatus"
+  ],
+  "instructions": "instructions.html",
+  "schema_hints": {
+    "timestamp": "ISO-8601 request time. Useful for rate-per-minute analysis.",
+    "uri": "Full request URI. Endpoint templates reveal enumeration patterns \u2014 walk a numeric ID space?",
+    "userID": "'0' for logged-out traffic (about 23% of rows). Logged-in user IDs are present too. The interesting activity for this scenario is in the logged-out portion.",
+    "IP": "Source IP. Non-routable / synthetic for safety. Per-IP volume can mislead \u2014 look deeper.",
+    "ASN": "Autonomous System Number. Compare consumer-ISP ASNs vs datacenter ASNs vs known residential-proxy provider ASNs. The ASN composition of a cluster is often the loudest signal.",
+    "requestHeaders": "Serialized JSON of headers. Order and presence matters \u2014 real browsers send specific headers, scrapers often omit them.",
+    "requestCookieNames": "Comma-separated cookie name list. Empty cookies on a web page request is a strong tell.",
+    "JA4": "TLS client fingerprint. Identical JA4 across thousands of IPs is suspicious. But beware \u2014 real browsers also share JA4 fingerprints.",
+    "userAgent": "Browser/app UA string. Spoofable but useful in combination with other signals.",
+    "parameters": "Query string parameters. Fixed parameters across many IPs = enumeration.",
+    "responseCode": "HTTP status code.",
+    "responseContentSize": "Response body size in bytes. Consistent sizes suggest template responses (scraping).",
+    "endpointKey": "Endpoint identifier (path-only, no query string).",
+    "authStatus": "Either 'logged_out' or 'logged_in'. The interesting activity for this scenario is in the logged-out subset.",
+    "serverLocal": "Data-center region label."
+  },
+  "hints": [
+    {
+      "label": "Look at signals together, not in isolation",
+      "text": "Single signals (e.g. high request volume per IP) will mislead you here \u2014 see the partner and power users. Combine signals: JA4 + missing cookies + ASN type + endpoint pattern."
+    },
+    {
+      "label": "Cookies and referer are powerful",
+      "text": "Real browser users will almost always send session cookies and a referer chain. A request with no cookies hitting a logged-out web page is unusual."
+    },
+    {
+      "label": "Endpoint enumeration",
+      "text": "Once you find a suspicious cluster, look at the URI patterns. Is the same endpoint template being walked across many values? That's enumeration."
+    },
+    {
+      "label": "ASN reputation matters",
+      "text": "Several major commercial residential-proxy providers operate well-known ASNs. Their appearance in your traffic is itself signal. Cross-reference your suspicious IPs against a known-proxy ASN list (publicly maintained ones exist)."
+    },
+    {
+      "label": "Distinguish the partner",
+      "text": "There's a legitimate partner integration with high volume too. They identify themselves via a labeled User-Agent and partner-specific cookies. Make sure your detection doesn't false-positive them."
+    }
+  ],
+  "sample_queries": [
+    {
+      "title": "Cookie state distribution",
+      "description": "Find requests that arrive with no cookies \u2014 unusual for browser users.",
+      "sql": "SELECT requestCookieNames, COUNT(*) AS hits, COUNT(DISTINCT IP) AS unique_ips\nFROM phantomfeed_logs_logged_out\nGROUP BY requestCookieNames\nORDER BY hits DESC"
+    },
+    {
+      "title": "JA4 + no cookies",
+      "description": "Stack two signals \u2014 fingerprint reuse and missing cookies.",
+      "sql": "SELECT JA4, userAgent, COUNT(*) AS hits, COUNT(DISTINCT IP) AS ips,\n       COUNT(DISTINCT ASN) AS asns\nFROM phantomfeed_logs_logged_out\nWHERE requestCookieNames = ''\nGROUP BY JA4, userAgent\nORDER BY hits DESC"
+    },
+    {
+      "title": "ASNs of the suspect cluster",
+      "description": "Which ASNs host the no-cookie traffic? Look up names of unknown ASNs.",
+      "sql": "SELECT ASN, COUNT(*) AS hits, COUNT(DISTINCT IP) AS ips\nFROM phantomfeed_logs_logged_out\nWHERE requestCookieNames = ''\nGROUP BY ASN\nORDER BY hits DESC"
+    },
+    {
+      "title": "What endpoints are being hit",
+      "description": "What is the scraper after? Group by URI pattern.",
+      "sql": "SELECT\n  CASE\n    WHEN uri LIKE '%/u/user_%' THEN '/u/user_<N>'\n    WHEN uri LIKE '%/p/post_%' THEN '/p/post_<N>'\n    WHEN uri LIKE '%/groups/group_%' THEN '/groups/group_<N>'\n    WHEN uri LIKE '%/api/partner%' THEN 'partner-api'\n    ELSE 'other'\n  END AS template,\n  COUNT(*) AS hits,\n  COUNT(DISTINCT IP) AS ips\nFROM phantomfeed_logs_logged_out\nWHERE requestCookieNames = ''\nGROUP BY template\nORDER BY hits DESC"
+    },
+    {
+      "title": "Partner traffic (do not false-positive)",
+      "description": "Compare partner traffic \u2014 it has a labeled UA and cookies.",
+      "sql": "SELECT userAgent, requestCookieNames, IP, ASN, COUNT(*) AS hits\nFROM phantomfeed_logs_logged_out\nWHERE userAgent LIKE '%Partner%'\nGROUP BY userAgent, requestCookieNames, IP, ASN"
+    },
+    {
+      "title": "Rate per IP (suspect cluster)",
+      "description": "Per-IP rates are LOW for distributed scrapers \u2014 that's the point of a proxy pool.",
+      "sql": "SELECT IP, ASN, COUNT(*) AS hits\nFROM phantomfeed_logs_logged_out\nWHERE requestCookieNames = ''\nGROUP BY IP, ASN\nORDER BY hits DESC\nLIMIT 30"
+    }
+  ]
+}

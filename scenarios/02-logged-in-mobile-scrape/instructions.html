@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Instructions — Logged-In Mobile API Abuse — Phantom Feed</title>
+  <link rel="icon" type="image/x-icon" href="/images/favicons/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicons/favicon-16x16.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicons/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/images/favicons/favicon-192x192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicons/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <link rel="stylesheet" href="/platform/styles/core.css" />
+</head>
+<body>
+  <header class="site-header">
+    <a href="/" class="brand"><span class="brand-mark">◯</span><span class="brand-name">Ghost in the Bit</span></a>
+    <nav class="site-nav-inline" id="site-nav-inline"></nav>
+  </header>
+
+  <main class="article">
+    <header class="article-header">
+      <h1 class="article-title">Scenario 02 — Logged-In Mobile API Abuse</h1>
+      <div class="article-meta">
+        <span class="difficulty-pill" data-level="intermediate">intermediate</span>
+        <span class="category-pill">scraping</span>
+        <span>Estimated time: 60 min</span>
+      </div>
+    </header>
+
+    <h2>Scenario</h2>
+    <p>
+      Yesterday, the Phantom Feed security team received a report from a partner
+      indicating that <strong>some kind of automated scraping activity</strong>
+      may be occurring against the mobile site <code>m.phantomfeed.io</code>.
+      To investigate, you have been handed three days of HTTP logs
+      (~300,000 entries) captured during the suspected activity window.
+    </p>
+
+    <h2>Your goal</h2>
+    <p>
+      Identify the bad actor and determine what they are doing. You are not
+      being told what endpoint or dataset is being targeted. Your task is to:
+    </p>
+    <ul>
+      <li>Discover patterns in the traffic</li>
+      <li>Isolate suspicious behavior</li>
+      <li>Arrive at a defensible conclusion and justify your findings with SQL</li>
+    </ul>
+
+    <h2>What you may assume</h2>
+    <ul>
+      <li>Logs represent real user and partner traffic mixed with noise.</li>
+      <li>Suspicious traffic is present but not labeled.</li>
+      <li>All requests are <strong>authenticated</strong> — every row has a real <code>userID</code>.</li>
+      <li>IPs are intentionally non-routable / synthetic for safety.</li>
+    </ul>
+
+    <h2>The dataset</h2>
+    <p>
+      You will be querying a single SQLite table named
+      <code>phantomfeed_logs_logged_in</code>. The console will auto-load it
+      when you select this scenario. Click the <strong>Schema</strong> tab
+      in the sidebar to see all columns with hints, or click
+      <strong>Sample queries</strong> to load starter SQL.
+    </p>
+
+    <h2>Why this one is harder</h2>
+    <p>
+      In an authenticated scrape, every row has a userID. That means:
+    </p>
+    <ul>
+      <li>You can't filter by "missing cookies" — every request has a real session.</li>
+      <li>JA4 reuse across IPs is normal because real users with the same browser share JA4s.</li>
+      <li>The scraper has a stolen or farmed account — or rotates through many.</li>
+    </ul>
+    <p>
+      You'll need to look at the relationship between users, devices, and the
+      endpoints being hit. Once you find the suspect cluster, characterize the
+      automation signals that distinguish it from heavy human use.
+    </p>
+
+    <p style="margin-top: 32px;">
+      <a class="primary-btn" href="/platform/console.html?scenario=02-logged-in-mobile-scrape">Open the console for this scenario</a>
+    </p>
+  </main>
+
+  <footer class="site-footer">
+    <p><span id="footer-year"></span> · Ghost in the Bit</p>
+  </footer>
+  <script type="module">
+    import { renderSiteNav } from "/platform/lib/site-nav.js";
+    renderSiteNav(document.getElementById("site-nav-inline"));
+    document.getElementById("footer-year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>
