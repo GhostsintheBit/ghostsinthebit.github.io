@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rediscovering a Rate Limit Bypass: Cookie Header Strikes Again — Ghost in the Bit</title>
+  <meta name="description" content="A second encounter with a cookie-vs-token rate-limit bypass on a different platform, and what it tells us about how often this pattern recurs." />
+  <link rel="icon" type="image/x-icon" href="/images/favicons/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicons/favicon-16x16.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicons/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/images/favicons/favicon-192x192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicons/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <link rel="stylesheet" href="/platform/styles/core.css" />
+</head>
+<body>
+  <header class="site-header">
+    <a href="/" class="brand"><span class="brand-mark">◯</span><span class="brand-name">Ghost in the Bit</span></a>
+    <nav class="site-nav-inline" id="site-nav-inline"></nav>
+  </header>
+
+  <main class="article">
+    <header class="article-header">
+      <h1 class="article-title">Rediscovering a Rate Limit Bypass: Cookie Header Strikes Again</h1>
+      <div class="article-meta">
+        <span class="category-pill">rate limits</span>
+        <time datetime="2025-02-19">Feburary 19, 2025</time>
+        <span>Bypass</span>
+      </div>
+    </header>
+
+    <h2>The discovery and what caught my attention</h2>
+    <p>During a recent assessment, I ran into a rate limit issue that felt familiar but still surprising in its own way. The API I was testing had a typical rate limiting setup to slow down repetitive or aggressive traffic. After reaching the limit, I noticed something unexpected. If I replaced the Authorization Bearer token with a Cookie header, the system allowed me to continue making requests. The cookie did not need to match a real session. It simply needed to look like a proper cookie.</p>
+
+    <h3>A simple swap with unintended results</h3>
+    <p>Once the rate limit kicked in, the system responded with the usual error codes such as 302, 400, and 429. But as soon as I added the Cookie header, everything changed. Requests that should have been blocked were now going through without resistance. It did not matter that the rate limit had already been reached. The presence of the cookie alone was enough to let the traffic flow again.</p>
+
+    <h3>Trying to understand what was happening</h3>
+    <p>Without access to the backend, I can only share ideas based on past experience and what I observed during testing. Here are a few possibilities that may explain why this worked:</p>
+    <ol>
+      <li><strong>Session context override.</strong> Some systems tie rate limits to session identifiers. By switching from a token to a cookie, the request might have been treated as coming from a different session entirely.</li>
+      <li><strong>Fallback between authentication methods.</strong> When a system supports both token-based requests and cookie-based session handling, one type of authentication may unintentionally take priority over the other. The cookie may have shifted the system into a different logic path where the rate limit was not enforced the same way.</li>
+      <li><strong>Confusion in the rate limit key.</strong> Many rate limiters use a combination of headers and identifiers to track usage. Adding the cookie may have altered that key enough to make the server think it was receiving traffic from a different source.</li>
+      <li><strong>Mixed response code behavior.</strong> The different response codes I saw suggested that requests were being handled through slightly different logic branches depending on the headers present. This usually means inconsistent session handling somewhere in the chain.</li>
+    </ol>
+
+    <h3>Why this matters more than it first appears</h3>
+    <p>At first glance this type of bypass might seem small, but it can allow for several problematic behaviors:</p>
+    <ul>
+      <li><strong>Uncontrolled request volume.</strong> Someone could make far more requests than intended and collect much more data than the system is designed to expose at one time.</li>
+      <li><strong>Brute force attempts.</strong> If rate limits can be avoided, the door is open for repeated password or credential testing.</li>
+      <li><strong>Strain on backend systems.</strong> Allowing unlimited calls can slow down or even disrupt services for real users.</li>
+      <li><strong>Unwanted data harvesting.</strong> Excessive data scraping becomes much easier when limits can be ignored.</li>
+    </ul>
+
+    <h3>A pattern I have seen before</h3>
+    <p>This was not the first time I found a rate limit bypass related to cookies. In a previous assessment, I discovered that combining a session cookie with an OAuth token opened the door to bypass rate limits in a different way. This time it required even less. A simple swap between a token and a cookie was enough. Whenever multiple authentication methods exist side by side, it becomes easy for small gaps to appear between them.</p>
+
+    <h3>A quick reflection</h3>
+    <p>I do not see this as a mistake by the development team, but more as one of those tricky interactions that happen when a system evolves over time. Small pieces of logic can collide in ways nobody expects. Finding these issues helps strengthen the system and gives everyone a clearer picture of how the service behaves in real conditions.</p>
+
+    <h3>The mind map</h3>
+    <p>The diagram below is how I tracked the relationships between the different cookies, tokens, and bypass paths as I worked through this.</p>
+    <img src="/images/cookie_id_mind_map.png" alt="Mind map of cookie and token relationships" style="border: 1px solid var(--border-soft); border-radius: var(--radius-2); margin: 16px 0;" />
+    <div class="newsletter-cta inline">
+      <h2 class="newsletter-cta-heading">Liked this?</h2>
+      <p class="newsletter-cta-sub">
+        I write one of these a month. Drop your email below to get new posts
+        and scenarios in your inbox. No spam.
+      </p>
+      <form
+        action="https://buttondown.com/api/emails/embed-subscribe/ghostinthebit"
+        method="post"
+        class="embeddable-buttondown-form"
+        target="popupwindow"
+      >
+        <label for="bd-email">Enter your email</label>
+        <input type="email" name="email" id="bd-email" placeholder="your@email.com" required />
+        <input type="submit" value="Subscribe" />
+        <p>
+          <a href="https://buttondown.com/refer/ghostinthebit" target="_blank" rel="noopener">
+            Powered by Buttondown.
+          </a>
+        </p>
+      </form>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p><span id="footer-year"></span> · Ghost in the Bit</p>
+  </footer>
+  <script type="module">
+    import { renderSiteNav } from "/platform/lib/site-nav.js";
+    renderSiteNav(document.getElementById("site-nav-inline"), "blog");
+    document.getElementById("footer-year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>

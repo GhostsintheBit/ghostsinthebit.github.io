@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>What I Built and Why — Ghost in the Bit</title>
+  <meta name="description" content="Why I built Phantom Feed, a browser-based SQL workbench for practicing scraping and abuse investigations on realistic synthetic traffic." />
+  <link rel="icon" type="image/x-icon" href="/images/favicons/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicons/favicon-16x16.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicons/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/images/favicons/favicon-192x192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicons/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <link rel="stylesheet" href="/platform/styles/core.css" />
+</head>
+<body>
+  <header class="site-header">
+    <a href="/" class="brand"><span class="brand-mark">◯</span><span class="brand-name">Ghost in the Bit</span></a>
+    <nav class="site-nav-inline" id="site-nav-inline"></nav>
+  </header>
+
+  <main class="article">
+    <header class="article-header">
+      <h1 class="article-title">What I Built and Why</h1>
+      <div class="article-meta">
+        <span class="category-pill">platform</span>
+        <time datetime="2026-05-26">May 26, 2026</time>
+        <span>6 min read</span>
+      </div>
+    </header>
+
+    <p>
+      Investigation work has this strange property where most of what makes
+      someone good at it stays invisible to people learning the craft.
+    </p>
+
+    <p>
+      I have spent years now doing offensive security work focused on scraping,
+      bot abuse, and rate limit assessments and the investigations themselves
+      are deeply pattern based. You learn to read traffic the way a doctor
+      learns to read X rays. Most signals do not mean anything on their own,
+      they only mean something next to other signals or compared to what the
+      same actor was doing a week ago.
+    </p>
+
+    <p>
+      That kind of pattern recognition is really hard to teach with a tutorial
+      or a blog post. You only learn it by digging into a bunch of real data
+      and being wrong about it over and over. The first dozen scraping
+      operations look identical to you. By the fiftieth, the shape of each
+      one is obvious in a different way and you start to wonder how you ever
+      missed it.
+    </p>
+
+    <p>
+      Here is the problem though. Almost no one outside of a handful of large
+      platforms has the chance to dig into realistic abuse data and be wrong
+      about it many times. The data is locked inside companies. The
+      investigators who develop the craft do it on production traffic at the
+      major social platforms, the big infrastructure providers, the
+      household name marketplaces, and everyone else has to learn the work
+      from descriptions of the work. Students, junior analysts, people
+      interviewing for these roles, consultants from outside the major
+      platforms. They all get the writeups and the conference talks but they
+      do not get the raw thing to work with.
+    </p>
+
+    <p>
+      I wanted to change that, even a little. So I built Phantom Feed.
+    </p>
+
+    <h2>What it is</h2>
+
+    <p>
+      Phantom Feed is a browser based SQL workbench loaded with synthetic HTTP
+      traffic. You pick a scenario, you get a realistic shaped dataset, and
+      you investigate it the same way you would investigate real traffic, by
+      writing queries and reading the results.
+    </p>
+
+    <p>
+      It runs entirely client side. No account, no install, no server. You
+      open the page, the data loads, you start writing SQL.
+    </p>
+
+    <p>
+      There are four scenarios right now, ordered by difficulty.
+    </p>
+
+    <p>
+      <strong>Logged out web scrape.</strong> A scraper hits a public profile
+      endpoint across 600 residential proxy IPs. The bad actor is isolable but
+      only if you look at the right signal stack. This is the beginner
+      friendly entry point and a good place to start if you have never done
+      this kind of work before.
+    </p>
+
+    <p>
+      <strong>Logged in mobile API abuse.</strong> A malicious partner
+      integration enumerating partner scoped endpoints across thousands of
+      user accounts from a small datacenter IP pool. This one forces you past
+      simple per IP filtering and into multi signal attribution, which is
+      where most real investigations actually live.
+    </p>
+
+    <p>
+      <strong>Insider data exfiltration.</strong> Sixty days of authenticated
+      traffic across five related tables. One employee's behavior diverges
+      from their own 45 day baseline starting around day 46. Two other
+      employees look superficially suspicious but have documented business
+      reasons for their changes. The investigation requires per employee
+      baselining, multi table joins, and false positive reasoning, which is
+      exactly the kind of work trust and safety engineers do for a living.
+    </p>
+
+    <p>
+      <strong>The Living Investigation.</strong> Thirty days of an evolving
+      attack. The defenders deploy a per IP rate limit. The attacker pivots
+      to residential proxies. The defenders deploy a JA4 block. The attacker
+      switches to curl impersonate. The defenders require cookies. The
+      attacker registers fake accounts. The defenders deploy CAPTCHA on
+      registration. The attacker outsources to a CAPTCHA solving service.
+      Investigators have to reconstruct all eight phases from the logs alone
+      and then reason about which defensive moves were most disruptive and
+      why.
+    </p>
+
+    <p>
+      Each scenario ships with instructions, progressive hints, sample queries,
+      and schema documentation. The data is designed to reward careful
+      reading. Superficial queries return misleading answers, the right ones
+      reveal the structure.
+    </p>
+
+    <h2>What realistic actually means here</h2>
+
+    <p>
+      I want to be honest about what is faked and what is accurate.
+    </p>
+
+    <p>
+      The traffic shapes, things like request cadence, response sizes, error
+      rates, day of week effects, residential proxy ASN distributions, JA4
+      fingerprint distributions across real client populations, those are
+      modeled on patterns I have observed in real assessments. They are not
+      pulled from any specific client and the synthetic generators in the
+      open source toolkit are documented if you want to inspect the
+      assumptions for yourself.
+    </p>
+
+    <p>
+      What is accurate is the shape of the signals. The way a curl impersonate
+      chrome JA4 collides with the legitimate Chrome JA4 in the data. The way
+      residential proxy IP distributions look when you map them by ASN. The
+      way a bulk export endpoint's response sizes betray exfiltration even
+      when the actor is careful about request volume.
+    </p>
+
+    <p>
+      What is not in scope. Deep packet inspection. Protocol layer analysis
+      below TLS. Anything that requires you to look at request bodies in
+      detail. Phantom Feed is about reading metadata at scale, not about
+      exploiting individual requests, and that distinction matters because the
+      two kinds of work feel similar but use completely different muscles.
+    </p>
+
+    <p>
+      If you do anti scraping work for a living and you find the data
+      unrealistic in some specific way, please tell me. The scenarios are open
+      and the generators are public for exactly this reason. The platform gets
+      better when people who do this work for a living push back on it.
+    </p>
+
+    <h2>Who I think this is for</h2>
+
+    <p>
+      A few audiences I had in mind while building it.
+    </p>
+
+    <p>
+      People interviewing for anti abuse, trust and safety, or investigation
+      roles at consumer platforms. The interview process for these roles often
+      involves SQL based investigation problems and Phantom Feed gives you
+      something to practice on.
+    </p>
+
+    <p>
+      Security professionals adjacent to but not inside the platforms.
+      Pentesters who see scraping behavior in assessments. Threat intel
+      analysts who track scraping operations from the outside. Anyone who has
+      wanted to develop investigation chops without access to a platform's
+      internal data.
+    </p>
+
+    <p>
+      People learning to read traffic. Students, junior analysts, anyone
+      earlier in their career who wants to develop the pattern recognition
+      layer of this work and is tired of toy CTF problems that do not look
+      anything like real abuse.
+    </p>
+
+    <p>
+      People hiring for these roles. Phantom Feed makes a defensible take home
+      assignment. The bad actor in each scenario is recoverable but only with
+      real reasoning. There is no shortcut.
+    </p>
+
+    <p>
+      It is not for everyone. If you are already running detection at a major
+      platform, you probably will not learn anything here you do not already
+      know. If you want a CTF style challenge with a flag at the end, the
+      format will frustrate you, because investigations do not end with a
+      flag, they end with a written finding that someone else has to act on.
+    </p>
+
+    <h2>Why I am writing publicly about it</h2>
+
+    <p>
+      The work I do is genuinely interesting but most of it is invisible to
+      anyone outside the engagement. Client confidentiality is real and it
+      should be. The downside is that the parts of the craft that could
+      actually help others learn never make it out the door.
+    </p>
+
+    <p>
+      This blog and Phantom Feed are my attempt to do the parts of that work
+      that can be public. Share patterns, develop ideas, contribute to the
+      small community of people who think seriously about scraping and abuse.
+      There is no monetization right now. There may be eventually, in the form
+      of a paid tier with additional scenarios or interview focused content,
+      but only if the platform gets used enough to justify it and only if the
+      free version stays meaningfully useful on its own.
+    </p>
+
+    <p>
+      For now the scenarios are free, the source is on GitHub, and the data
+      is yours to work with however you want.
+    </p>
+
+    <h2>What is next</h2>
+
+    <p>
+      Over the next several months I will be writing about specific
+      investigation patterns I see come up. JA4 stacking, behavioral
+      baselining, multi table attribution, the economics of cat and mouse
+      defense. I will be adding scenarios, roughly one per quarter, focused on
+      areas the existing four do not cover yet, things like account takeover,
+      coordinated inauthentic behavior, attribution against shifting
+      infrastructure. And I will be publishing technical post mortems of each
+      new scenario after a buffer period so people can actually solve them
+      before the writeup goes up.
+    </p>
+
+    <p>
+      If you want to be notified when new scenarios drop or new posts go up
+      there is an email signup on the page. One email a month, no upsells, no
+      sponsored garbage.
+    </p>
+
+    <p>
+      If you have feedback on the platform, the data, the scenarios, the
+      writing, anything that is missing or wrong or overcooked, please send
+      it. My email is in the site footer and I read everything that comes in.
+    </p>
+
+    <p>
+      The console is at
+      <a href="/platform/console.html">ghostinthebit.com/platform/console.html</a>.
+      Start with scenario 01 if you are new to this kind of work, or jump
+      straight to scenario 04 if you want to see what the platform is capable
+      of.
+    </p>
+
+    <div class="newsletter-cta inline">
+      <h2 class="newsletter-cta-heading">Liked this?</h2>
+      <p class="newsletter-cta-sub">
+        I write one of these a month. Drop your email below to get new posts
+        and scenarios in your inbox. No spam.
+      </p>
+      <form
+        action="https://buttondown.com/api/emails/embed-subscribe/ghostinthebit"
+        method="post"
+        class="embeddable-buttondown-form"
+        target="popupwindow"
+      >
+        <label for="bd-email">Enter your email</label>
+        <input type="email" name="email" id="bd-email" placeholder="your@email.com" required />
+        <input type="submit" value="Subscribe" />
+        <p>
+          <a href="https://buttondown.com/refer/ghostinthebit" target="_blank" rel="noopener">
+            Powered by Buttondown.
+          </a>
+        </p>
+      </form>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p><span id="footer-year"></span> · Ghost in the Bit</p>
+  </footer>
+  <script type="module">
+    import { renderSiteNav } from "/platform/lib/site-nav.js";
+    renderSiteNav(document.getElementById("site-nav-inline"), "blog");
+    document.getElementById("footer-year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>

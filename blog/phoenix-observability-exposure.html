@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The AI Writes Down Everything You Say, and Most of It Is Wide Open — Ghost in the Bit</title>
+  <meta name="description" content="A reproducible measurement of exposed Arize Phoenix instances, the layer that logs the actual prompts and responses flowing through AI apps. 71% of reachable instances had no authentication. Enumerate only, no trace data accessed." />
+  <link rel="icon" type="image/x-icon" href="/images/favicons/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicons/favicon-16x16.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicons/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/images/favicons/favicon-192x192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicons/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <link rel="stylesheet" href="/platform/styles/core.css" />
+  <style>
+    /* Report-specific additions, built from core.css tokens so it stays native */
+    .stat-callout {
+      background: var(--bg-1);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-3);
+      padding: var(--space-6) var(--space-5);
+      margin: var(--space-6) 0;
+      text-align: center;
+    }
+    .stat-callout .num {
+      font-size: 3.4rem;
+      font-weight: 700;
+      color: var(--accent-2);
+      line-height: 1;
+      letter-spacing: -0.02em;
+    }
+    .stat-callout .cap {
+      margin-top: var(--space-3);
+      color: var(--text-2);
+      font-size: 0.95rem;
+    }
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: var(--space-5) 0;
+      font-size: 0.9rem;
+    }
+    .data-table th, .data-table td {
+      text-align: left;
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--border-soft);
+    }
+    .data-table thead th {
+      color: var(--text-2);
+      font-weight: 600;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-bottom: 1px solid var(--border-strong);
+    }
+    .data-table td.num, .data-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .data-table tbody tr:hover { background: var(--bg-2); }
+    .data-table .accent { color: var(--accent-2); font-weight: 600; }
+    .data-table .muted td { color: var(--text-3); }
+    .key-list { list-style: none; padding: 0; margin: var(--space-4) 0; }
+    .key-list li {
+      position: relative;
+      padding: 10px 0 10px 22px;
+      border-bottom: 1px solid var(--border-soft);
+      color: var(--text-1);
+    }
+    .key-list li::before {
+      content: "";
+      position: absolute; left: 0; top: 17px;
+      width: 8px; height: 8px;
+      background: var(--accent);
+      transform: rotate(45deg);
+    }
+    .callout-note {
+      background: var(--bg-2);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 var(--radius-2) var(--radius-2) 0;
+      padding: var(--space-3) var(--space-5);
+      margin: var(--space-5) 0;
+      color: var(--text-1);
+      font-size: 0.95rem;
+    }
+    .callout-note strong { color: var(--text-0); }
+    .series-nav {
+      font-size: 0.9rem; color: var(--text-2);
+      background: var(--bg-1); border: 1px solid var(--border-soft);
+      border-radius: var(--radius-2); padding: var(--space-3) var(--space-4);
+      margin: var(--space-5) 0;
+    }
+    .series-nav a { color: var(--accent-2); }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <a href="/" class="brand"><span class="brand-mark">◯</span><span class="brand-name">Ghost in the Bit</span></a>
+    <nav class="site-nav-inline" id="site-nav-inline"></nav>
+  </header>
+
+  <main class="article">
+    <header class="article-header">
+      <h1 class="article-title">The AI Writes Down Everything You Say, and Most of It Is Wide Open</h1>
+      <div class="article-meta">
+        <span class="category-pill">research</span>
+        <time datetime="2026-06-05">June 5, 2026</time>
+        <span>Internet measurement</span>
+        <span>10 min read</span>
+      </div>
+    </header>
+
+    <div class="series-nav">
+      Part of a series measuring layers of the AI stack. See also the
+      <a href="/blog/exposed-vector-databases.html">exposed vector databases</a> study and the
+      <a href="/blog/scan-coverage-followup.html">coverage analysis</a> that puts both datasets in BigQuery.
+    </div>
+
+    <p>
+      Last time I went looking for exposed vector databases, the layer where AI systems keep the
+      knowledge they were given. This time I went one layer over, to the place that records what
+      people actually said. When you build an AI app and want to debug it, you reach for an
+      observability tool that traces every call: the prompt that went in, the model response that
+      came back, the retrieved context, the tool calls, the whole conversation. That trace data is
+      not the stored knowledge behind the app. It is the live transcript of people using it.
+    </p>
+
+    <p>
+      Everyone has been counting the model servers and the vector stores. The layer that logs the
+      conversation itself is newer, and as far as I can tell nobody had measured how exposed it is.
+      So I did. I focused on one popular open source tool in this space, Arize Phoenix, found the
+      instances facing the internet, and checked whether they were locked. Most were not.
+    </p>
+
+    <h2>The short version</h2>
+    <ul class="key-list">
+      <li>Phoenix is an open source AI observability tool. It stores traces, meaning the prompts, the model responses, and the surrounding context for the AI apps it watches.</li>
+      <li>I found <strong>274</strong> instances on the standard port facing the internet. <strong>259</strong> answered when I checked.</li>
+      <li><strong>71 percent</strong> of the reachable instances had no authentication at all. The dashboard and its data API were simply open.</li>
+      <li>Of the ones that did have authentication switched on, <strong>every single one</strong> still had a data API that answered an unauthenticated request. Not one reachable instance was fully locked down.</li>
+      <li>This is arguably more sensitive than the vector database layer, because what is exposed is the live conversation, the actual text people typed and the actual text the model sent back.</li>
+    </ul>
+
+    <div class="callout-note">
+      <strong>On method, and the line I held.</strong> I found these with Censys using a fingerprint
+      specific to the app, and I checked posture by reading the configuration block that Phoenix
+      itself injects into the page it serves to every visitor. To detect the cases where auth was on
+      but the API still answered, I recorded only the HTTP status codes of the data endpoints. I never
+      read a single trace, a single prompt, or a single response. A status code tells you whether a
+      door is locked. It does not open the door. There are no addresses, names, or contents anywhere
+      in this post. The counts are a floor, bounded by what was indexed and the one standard port I
+      focused on.
+    </div>
+
+    <h2>Why this layer is the uncomfortable one</h2>
+    <p>
+      A vector database holds the documents an app was given to reason over. Bad enough when it is
+      open, and last time I found a lot of it open. But an observability tool sits in the live path
+      and records the running conversation. If an app handles medical questions, the traces hold the
+      medical questions and the answers. If it handles support tickets, the traces hold the tickets.
+      The stored knowledge layer is the filing cabinet. The trace layer is the wiretap, and it is
+      recording on behalf of the people who built the app, for their own debugging, which means it
+      tends to capture everything in plain readable form.
+    </p>
+    <p>
+      That is what makes the exposure rate matter more here than it did for the databases. It is the
+      same shape of mistake, a tool that is easy to stand up and easy to leave open, but the data
+      behind it is closer to the user.
+    </p>
+
+    <h2>The number</h2>
+    <div class="stat-callout">
+      <div class="num">71%</div>
+      <div class="cap">of reachable Phoenix instances had no authentication at all</div>
+    </div>
+    <p>
+      Out of 259 instances that answered, 184 had authentication turned off completely. The dashboard
+      loaded, the project list was there, the trace API responded, no password anywhere. That is the
+      headline, and it lands almost exactly where the open vector databases did, around seven in ten.
+    </p>
+
+    <h2>How I read posture without reading anything</h2>
+    <p>
+      Here is the part I liked. Phoenix is a single page app, and when it loads it injects its own
+      configuration into the page for the browser to read before the app starts. That config is served
+      to anyone who visits, and it states plainly whether authentication is enabled:
+    </p>
+    <pre><code>// served in the root page of every Phoenix instance
+value: Object.freeze({
+    platformVersion: "16.3.0",
+    authenticationEnabled: Boolean("False" == "True"),  // False == no auth
+    ...
+})</code></pre>
+    <p>
+      So posture is right there in the page the app hands out for free. No need to touch any data
+      endpoint to know whether a given instance is open. I read that flag and the version string,
+      nothing else from the body, across the whole population. It is the cleanest possible signal,
+      the app telling you its own lock state, and reading it accesses none of the stored traces.
+    </p>
+
+    <h2>The posture breakdown</h2>
+    <table class="data-table">
+      <thead><tr><th>Posture</th><th class="num">Instances</th><th class="num">Share of reachable</th></tr></thead>
+      <tbody>
+        <tr><td class="accent">No auth at all (wide open)</td><td class="num">184</td><td class="num">71.0%</td></tr>
+        <tr><td>Auth enabled, but API still answered</td><td class="num">71</td><td class="num">27.4%</td></tr>
+        <tr class="muted"><td>Fully locked down</td><td class="num">0</td><td class="num">0%</td></tr>
+        <tr class="muted"><td>Auth state unreadable</td><td class="num">4</td><td class="num">1.5%</td></tr>
+      </tbody>
+    </table>
+
+    <h2>The part that surprised me: the auth that did not</h2>
+    <p>
+      The 71 percent open figure is the headline, but the row under it is the more interesting one.
+      Of the reachable instances, 71 had authentication switched on. Good for them. Except every one
+      of those 71 still had at least one data endpoint that returned a success response to a request
+      with no credentials attached. Seventy one out of seventy one.
+    </p>
+    <p>
+      I want to be careful and precise about what that means, because I held a hard line on not reading
+      anything. I recorded the status code the endpoint returned, and nothing more. A success code on
+      an unauthenticated request means the protection does not fully cover the API, that the login on
+      the front of the dashboard is not in front of everything behind it. I did not read the responses,
+      so I am not going to tell you what those endpoints returned. I am telling you they answered when
+      they should have refused. That gap, between auth that is configured and auth that actually
+      covers the data paths, is the finding I did not expect, and it means the count of instances that
+      are meaningfully protected is closer to zero than to the number who thought they had turned
+      security on.
+    </p>
+
+    <h2>Where they live</h2>
+    <p>
+      I joined the instances back to their hosting and looked at open rates by provider. The short
+      version is that open is high everywhere, running from roughly half to nearly all depending on the
+      provider, with the per provider counts small enough that I would not lean hard on any single
+      percentage. The interesting wrinkle is a reversal from the vector database study. There, the big
+      clouds were the most locked down, because their default firewall posture quietly protected
+      careless operators. Here that protection mostly vanished. My best guess is that Phoenix is a
+      developer and notebook tool, so people deliberately open the port to reach the dashboard, and a
+      default firewall does not save you from a port you opened on purpose. Different kind of tool,
+      different deployment habit, opposite result. I would rather flag the reversal than pretend the
+      earlier pattern held.
+    </p>
+
+    <h2>A pile of old versions</h2>
+    <p>
+      One more thing fell out of the data. Across the population I counted 105 distinct versions
+      running, with the single most common one accounting for only a handful of hosts, and ancient
+      builds running right alongside current ones. That is the signature of a lot of stand it up once
+      and forget it deployments, the same long tail of stale installs I saw with the databases. Tools
+      that are easy to launch and easy to abandon accumulate exactly this kind of sediment.
+    </p>
+
+    <h2>So what</h2>
+    <p>
+      The fix on any single instance is small. Turn authentication on, make sure it actually covers the
+      API and not just the dashboard, put the thing behind a firewall, do not bind it to a public
+      address. The reason it does not happen is the same as always. Everything works fine from where
+      the developer is sitting, nothing warns them that the whole internet can read the trace log, and
+      the tool was built to be easy to start rather than safe to leave running.
+    </p>
+    <p>
+      We watched this movie with databases years ago, open by default, researchers measured it, the
+      defaults eventually changed. The AI tooling stack is running through the same cycle now, one
+      layer at a time. I looked at the stored knowledge layer last time. This time it is the layer that
+      records the conversation, and it is even less locked down than the one underneath it. I did not
+      read any of it. I also doubt I was the first to come knocking, and that is the part worth fixing.
+    </p>
+
+    <div class="newsletter-cta inline">
+      <h2 class="newsletter-cta-heading">Liked this?</h2>
+      <p class="newsletter-cta-sub">
+        I write one of these a month. Drop your email below to get new posts
+        and research in your inbox. No spam.
+      </p>
+      <form
+        action="https://buttondown.com/api/emails/embed-subscribe/ghostinthebit"
+        method="post"
+        class="embeddable-buttondown-form"
+        target="popupwindow"
+      >
+        <label for="bd-email">Enter your email</label>
+        <input type="email" name="email" id="bd-email" placeholder="your@email.com" required />
+        <input type="submit" value="Subscribe" />
+        <p>
+          <a href="https://buttondown.com/refer/ghostinthebit" target="_blank" rel="noopener">
+            Powered by Buttondown.
+          </a>
+        </p>
+      </form>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p><span id="footer-year"></span> · Ghost in the Bit</p>
+  </footer>
+  <script type="module">
+    import { renderSiteNav } from "/platform/lib/site-nav.js";
+    renderSiteNav(document.getElementById("site-nav-inline"), "blog");
+    document.getElementById("footer-year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>

@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Phantom Feed Console — Investigation SQL Workbench</title>
+  <meta name="description" content="Browser-based SQL investigation workbench for practicing scraping, abuse, and fraud detection on realistic traffic datasets." />
+  <link rel="icon" type="image/x-icon" href="/images/favicons/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicons/favicon-16x16.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicons/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/images/favicons/favicon-192x192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicons/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <link rel="stylesheet" href="/platform/styles/core.css" />
+  <link rel="stylesheet" href="/platform/styles/console.css" />
+</head>
+<body class="console-page">
+  <header class="site-header">
+    <a href="/" class="brand">
+      <span class="brand-mark">◯</span>
+      <span class="brand-name">Ghost in the Bit</span>
+    </a>
+    <nav class="site-nav-inline" id="site-nav-inline"></nav>
+  </header>
+
+  <main class="console-main">
+    <section class="scenario-bar">
+      <div class="scenario-bar-row">
+        <label class="scenario-picker-label" for="scenario-select">Scenario:</label>
+        <select id="scenario-select" class="scenario-select">
+          <option value="">— Select a scenario —</option>
+        </select>
+        <button id="upload-db-btn" class="ghost-btn">Upload custom .db</button>
+        <input type="file" id="db-file-input" accept=".db,.sqlite,.gz" hidden />
+        <span class="status-cluster">
+          <span id="engine-status" class="status-pill">Engine: starting…</span>
+          <span id="db-status" class="status-pill status-muted">No DB loaded</span>
+        </span>
+      </div>
+      <div class="scenario-bar-row scenario-bar-meta" id="scenario-meta" hidden>
+        <h1 id="scenario-title" class="scenario-title"></h1>
+        <span id="scenario-difficulty" class="difficulty-pill"></span>
+        <span id="scenario-category" class="category-pill"></span>
+        <a id="scenario-instructions" class="ghost-btn" target="_blank" rel="noopener">Instructions</a>
+      </div>
+      <p id="scenario-description" class="scenario-description" hidden></p>
+    </section>
+
+    <section class="workspace">
+      <aside class="sidebar">
+        <div class="sidebar-tabs" role="tablist">
+          <button class="sidebar-tab active" data-side-tab="schema" role="tab">Schema</button>
+          <button class="sidebar-tab" data-side-tab="hints" role="tab">Hints</button>
+          <button class="sidebar-tab" data-side-tab="samples" role="tab">Sample queries</button>
+          <button class="sidebar-tab" data-side-tab="history" role="tab">History</button>
+        </div>
+        <div class="sidebar-panel" id="side-panel-schema">
+          <div id="schema-content"><p class="schema-empty">Load a scenario to view the schema.</p></div>
+        </div>
+        <div class="sidebar-panel" id="side-panel-hints" hidden>
+          <div id="hints-content"><p class="hints-empty">No hints loaded.</p></div>
+        </div>
+        <div class="sidebar-panel" id="side-panel-samples" hidden>
+          <div id="samples-content"><p class="samples-empty">No sample queries.</p></div>
+        </div>
+        <div class="sidebar-panel" id="side-panel-history" hidden>
+          <div id="history-content"></div>
+        </div>
+      </aside>
+
+      <section class="editor-area">
+        <div class="tabs-header" id="tabs-header">
+          <button id="add-tab-btn" class="add-tab-btn" title="New query tab (Ctrl/Cmd+T)">+ New tab</button>
+        </div>
+        <div class="tabs-container" id="tabs-container"></div>
+      </section>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>
+      <span id="footer-year"></span> · Ghost in the Bit · Phantom Feed Investigation Platform
+      · <a href="https://github.com/GhostsintheBit/" target="_blank" rel="noopener">GitHub</a>
+    </p>
+  </footer>
+
+  <script type="module" src="/platform/lib/console-app.js"></script>
+  <script>
+    document.getElementById("footer-year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>

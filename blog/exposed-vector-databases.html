@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The AI Remembers Everything, and a Lot of It Is Wide Open — Ghost in the Bit</title>
+  <meta name="description" content="A reproducible Censys based measurement of exposed Qdrant vector databases. 73.5% of reachable instances required no authentication. Enumerate only methodology, no stored data accessed." />
+  <link rel="icon" type="image/x-icon" href="/images/favicons/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicons/favicon-16x16.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicons/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/images/favicons/favicon-192x192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicons/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <link rel="stylesheet" href="/platform/styles/core.css" />
+  <style>
+    /* Report-specific additions, built from core.css tokens so it stays native */
+    .article figure { margin: var(--space-6) 0; }
+    .article figure img {
+      width: 100%;
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-3);
+      background: var(--bg-2);
+    }
+    .article figcaption {
+      margin-top: var(--space-2);
+      font-size: 0.82rem;
+      color: var(--text-3);
+      text-align: center;
+    }
+    .stat-callout {
+      background: var(--bg-1);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-3);
+      padding: var(--space-6) var(--space-5);
+      margin: var(--space-6) 0;
+      text-align: center;
+    }
+    .stat-callout .num {
+      font-size: 3.4rem;
+      font-weight: 700;
+      color: var(--accent-2);
+      line-height: 1;
+      letter-spacing: -0.02em;
+    }
+    .stat-callout .cap {
+      margin-top: var(--space-3);
+      color: var(--text-2);
+      font-size: 0.95rem;
+    }
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: var(--space-5) 0;
+      font-size: 0.9rem;
+    }
+    .data-table th, .data-table td {
+      text-align: left;
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--border-soft);
+    }
+    .data-table thead th {
+      color: var(--text-2);
+      font-weight: 600;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-bottom: 1px solid var(--border-strong);
+    }
+    .data-table td.num, .data-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .data-table tbody tr:hover { background: var(--bg-2); }
+    .data-table .sub td:first-child { padding-left: 26px; color: var(--text-2); }
+    .data-table .accent { color: var(--accent-2); font-weight: 600; }
+    .key-list { list-style: none; padding: 0; margin: var(--space-4) 0; }
+    .key-list li {
+      position: relative;
+      padding: 10px 0 10px 22px;
+      border-bottom: 1px solid var(--border-soft);
+      color: var(--text-1);
+    }
+    .key-list li::before {
+      content: "";
+      position: absolute; left: 0; top: 17px;
+      width: 8px; height: 8px;
+      background: var(--accent);
+      transform: rotate(45deg);
+    }
+    .callout-note {
+      background: var(--bg-2);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 var(--radius-2) var(--radius-2) 0;
+      padding: var(--space-3) var(--space-5);
+      margin: var(--space-5) 0;
+      color: var(--text-1);
+      font-size: 0.95rem;
+    }
+    .callout-note strong { color: var(--text-0); }
+    .series-nav {
+      font-size: 0.9rem; color: var(--text-2);
+      background: var(--bg-1); border: 1px solid var(--border-soft);
+      border-radius: var(--radius-2); padding: var(--space-3) var(--space-4);
+      margin: var(--space-5) 0;
+    }
+    .series-nav a { color: var(--accent-2); }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <a href="/" class="brand"><span class="brand-mark">◯</span><span class="brand-name">Ghost in the Bit</span></a>
+    <nav class="site-nav-inline" id="site-nav-inline"></nav>
+  </header>
+
+  <main class="article">
+    <header class="article-header">
+      <h1 class="article-title">The AI Remembers Everything, and a Lot of It Is Wide Open</h1>
+      <div class="article-meta">
+        <span class="category-pill">research</span>
+        <time datetime="2026-06-04">June 4, 2026</time>
+        <span>Internet measurement</span>
+        <span>14 min read</span>
+      </div>
+    </header>
+
+    <div class="series-nav">
+      Part of a series measuring layers of the AI stack. See also the
+      <a href="/blog/phoenix-observability-exposure.html">exposed AI observability tools</a> study and the
+      <a href="/blog/scan-coverage-followup.html">coverage analysis</a> that puts both datasets in BigQuery.
+    </div>
+
+    <p>
+      Vector databases are where AI systems keep the stuff they know. When somebody builds a chatbot that can answer questions about their company docs, those docs get turned into vectors and stored in one of these things. The model out front is the part that talks, the vector database is the actual data behind it. that can answer questions about their company docs, those docs get turned into vectors and stored in one of these things. The model out front is the part that talks, the vector database is the actual data behind it.
+    </p>
+
+    <p>
+      I went looking for these using Censys, mostly Qdrant but I checked Weaviate too, and found a lot of them sitting on the public internet with the lock turned off. This is a writeup of what I found and how I found it, and I tried to do it without ever reading anybody's actual data, which I will get into.
+    </p>
+
+    <h2>The short version</h2>
+    <ul class="key-list">
+      <li>Censys turned up <strong>8,402</strong> Qdrant services facing the internet. After deduping by host that came to <strong>6,113</strong> unique boxes, and <strong>5,918</strong> of them actually answered when I knocked.</li>
+      <li>Of the ones that answered, <strong>73.5%</strong> had no authentication at all. Anybody could list what was inside. <strong>3,047</strong> of them handed over their full collection structure, which came to <strong>32,670</strong> collection names.</li>
+      <li>Most of it is harmless hobby stuff, knowledge bases and chatbot memory and test collections. A meaningful slice was not harmless though, I found medical records, legal case files with client names, bank and KYC data, resume databases, and a handful of facial recognition stores, all reachable without a password.</li>
+      <li>None of this took any hacking. The databases ship with the lock off and a lot of people never turn it on, and there is nothing that warns them, so it just sits there.</li>
+      <li>I ran the same thing against Weaviate to see if it was just a Qdrant problem. It is not, though Weaviate is a bit better, 57.7% of those exposed their schema versus Qdrant's 73.5%. The ones that were open leaned more sensitive though, a lot of law firm data.</li>
+    </ul>
+
+    <div class="callout-note">
+      <strong>On method, up front.</strong> This was an enumerate only study. I read what each service freely hands back to a normal unauthenticated request, meaning collection names, counts, version strings, and whether it asks for auth. I did not read any vectors, documents, or stored records, not once. The whole point was to measure how exposed these are without becoming part of the problem. The numbers here are a snapshot from a sample bounded by my API credits, so treat them as a floor and not a ceiling.
+    </div>
+
+    <div class="callout-note">
+      <strong>Credit where it is due.</strong> I am not the first person to look at this and I do not want to pretend otherwise. The Orca Security research team published <a href="https://orca.security/resources/blog/vector-database-security-risks/" target="_blank" rel="noopener">a thorough investigation into exposed vector databases</a> a couple of weeks before I started, and they went further than I did, they actually got inside and found real PII, credentials, and medical data, and in one case used secrets from a vector database to move further into a network. There is also a writeup making the rounds with per product exposure counts. Their work is the reason I knew this was worth measuring carefully. Go read the Orca piece, it is genuinely good. What follows is meant to add to that, not to claim it.
+    </div>
+
+    <h2>Why I bothered</h2>
+    <p>
+      Everybody has been writing about exposed AI lately. There were the big reports on open Ollama instances, tens of thousands of them just running models for anyone who showed up. Censys did a great one on MCP servers, which are the things that give an AI hands to go do stuff. Those got a lot of attention and rightly so.
+    </p>
+    <p>
+      The piece that got less attention is the memory. An exposed model is a reachable capability, somebody can make it generate text, fine, that is a problem. But the vector database behind a RAG setup is the actual private information somebody fed into it, and that felt like the more interesting thing to count because it is the data itself, not the thing that reads the data.
+    </p>
+    <p>
+      So to say it plainly again, the <a href="https://orca.security/resources/blog/vector-database-security-risks/" target="_blank" rel="noopener">Orca team</a> already showed the data inside these is real and sensitive. I did not want to repeat that, and I especially did not want to repeat the part where you read the data, since that is the thing I am asking people not to do. What I tried to add instead is three things they did not focus on. A reproducible way to find and measure these with Censys that anyone can rerun and check. A look at where the exposed ones are hosted and which providers leave them open more often, which turned out to be a real pattern. And a hard line of only ever reading the collection list, never the contents. Smaller scope than Orca on purpose, different angle.
+    </p>
+
+    <h3>What these look like from outside</h3>
+    <p>
+      Qdrant runs an HTTP API on port 6333. If you hit the root path it tells you its version, and if you hit <code>/collections</code> it gives you back the list of collections it holds, assuming nobody set an API key. That is the whole trick. There is no exploit, you ask the question the API was built to answer and it answers.
+    </p>
+
+    <figure>
+      <img src="/blog/images/vectordb/05-qdrant-host.png" alt="Censys host detail for a Qdrant service on port 6333 returning its version banner" />
+      <figcaption>A single Qdrant instance on 6333. The root path hands back its title and version with no auth in the way. IP and hashes redacted.</figcaption>
+    </figure>
+
+    <p>
+      I focused on Qdrant for the deep dive because the fingerprint is clean and the population was big enough to say something real. I also ran the whole thing against Weaviate, which I get to near the end. Chroma I left alone, and there is a reason for that I will explain.
+    </p>
+
+    <h2>How I did it</h2>
+    <p>
+      Two steps, and they are deliberately boring. First I used Censys to find the hosts. The Platform search caps how deep you can page on a single query, so to get most of the population I sliced the query by autonomous system, grabbing the big hosting providers one at a time and then sweeping up the tail. That got me 6,113 unique IPs.
+    </p>
+    <p>
+      Second, from a server I rent, I sent each one a single GET to <code>/collections</code> and wrote down what came back. Open with a list, open but empty, asked for auth, or did not answer. I ran it slow, a few requests a second, with a normal user agent that said what it was. The probe never asked for anything past the collection list. If a host returned a 401 or 403 I marked it locked and moved on, no poking.
+    </p>
+    <p>
+      The reason I ran it from a rented box and not my laptop is partly manners and partly that this is just how you do it, the same way Censys and Shodan are knocking on doors all day. The reason I stopped at the collection list is the important one. Reading the contents of someone else's database is illegal in most places even when the door is open, and it is exactly the harm this writeup is trying to get people to fix, so doing it would have been pretty hypocritical.
+    </p>
+
+    <figure>
+      <img src="/blog/images/vectordb/01-population-results.png" alt="Censys search results showing thousands of Qdrant hosts and example full stacks" />
+      <figcaption>The population in Censys. Note the example hosts are not running Qdrant alone, one has 17 services including Postgres, Grafana, Jupyter and AnythingLLM, the other pairs Qdrant with Flowise and Ollama. Identifying details redacted.</figcaption>
+    </figure>
+
+    <div class="callout-note">
+      <strong>The honest caveat.</strong> 6,113 is not literally every Qdrant on earth. Instances come and go, some sit behind hostnames I did not enumerate, and the slicing has edges. It is a large and representative chunk, not a census, and I would rather say that plainly than oversell it.
+    </div>
+
+    <h2>The number that matters</h2>
+    <div class="stat-callout">
+      <div class="num">73.5%</div>
+      <div class="cap">of reachable Qdrant instances required no authentication</div>
+    </div>
+    <p>
+      Out of 5,918 instances that answered, 4,350 were open and 1,568 wanted a password. Of the open ones, 3,047 actually had collections in them and the other 1,303 were empty, freshly stood up or wiped. So a little over half of everything I reached was unlocked with data structure sitting right there to read.
+    </p>
+    <table class="data-table">
+      <thead><tr><th>Posture</th><th class="num">Count</th><th class="num">Share of reachable</th></tr></thead>
+      <tbody>
+        <tr><td class="accent">Open, no auth</td><td class="num">4,350</td><td class="num">73.5%</td></tr>
+        <tr class="sub"><td>with collections</td><td class="num">3,047</td><td class="num">51.5%</td></tr>
+        <tr class="sub"><td>empty</td><td class="num">1,303</td><td class="num">22.0%</td></tr>
+        <tr><td>Auth required</td><td class="num">1,568</td><td class="num">26.5%</td></tr>
+      </tbody>
+    </table>
+    <p>
+      For what it is worth my early test of 50 hosts came in at 70%, and the full run landed at 73.5%, so the number held up which made me trust it more.
+    </p>
+
+    <h2>Where these live, and who leaves them open</h2>
+    <p>
+      This is the part I had not seen anybody else break out, so it is the bit I am most happy with. I joined every reachable IP back to its hosting provider and then looked at the open rate per provider. The hosting matters more than I expected.
+    </p>
+
+    <figure>
+      <img src="/blog/images/vectordb/02-asn-breakdown.png" alt="Censys Report Builder breakdown of Qdrant hosts by autonomous system" />
+      <figcaption>Qdrant hosts by autonomous system. The top four are all budget VPS providers and together they are nearly half the population.</figcaption>
+    </figure>
+
+    <table class="data-table">
+      <thead><tr><th>Provider</th><th>Country</th><th class="num">Instances</th><th class="num">Open</th><th class="num">Open %</th></tr></thead>
+      <tbody>
+        <tr><td>OVH</td><td>FR</td><td class="num">945</td><td class="num">819</td><td class="num accent">87%</td></tr>
+        <tr><td>Contabo</td><td>DE</td><td class="num">508</td><td class="num">393</td><td class="num">77%</td></tr>
+        <tr><td>AWS</td><td>US</td><td class="num">136</td><td class="num">103</td><td class="num">76%</td></tr>
+        <tr><td>DigitalOcean</td><td>US</td><td class="num">675</td><td class="num">489</td><td class="num">72%</td></tr>
+        <tr><td>Hetzner</td><td>DE</td><td class="num">857</td><td class="num">607</td><td class="num">71%</td></tr>
+        <tr><td>Alibaba Cloud</td><td>CN</td><td class="num">251</td><td class="num">169</td><td class="num">67%</td></tr>
+        <tr><td>Microsoft Azure</td><td>US</td><td class="num">278</td><td class="num">164</td><td class="num">59%</td></tr>
+        <tr><td>Google Cloud</td><td>US</td><td class="num">246</td><td class="num">121</td><td class="num accent">49%</td></tr>
+      </tbody>
+    </table>
+
+    <p>
+      So open by default is basically everywhere, but the cheap VPS providers are the worst, OVH at 87% is rough, Contabo and Hetzner are right up there too. The only two that come in clearly below the pack are Google Cloud at 49% and Azure at 59%. My best guess is that the big clouds make you go out of your way to put something on a public IP, there are firewall rules and security groups in the way by default, whereas a five dollar VPS just drops you straight onto the internet with nothing in front of you. So the same person doing the same careless thing ends up exposed on the cheap box and accidentally protected on the expensive one.
+    </p>
+
+    <p>
+      One provider stuck out hard. There was an autonomous system, AROSS, with 232 Qdrant instances and every single one of them was open, a 100% rate. When I looked closer they all shared the exact same two collections, <code>knowledge_seo</code> and <code>seo_keywords</code>. That is not 232 different people, that is one outfit running an SEO tool across 232 servers and never locking any of them. More on that pattern in a second.
+    </p>
+
+    <h3>Geography</h3>
+    <p>
+      The map leans European, which lines up with the hosting since OVH is France and Hetzner and Contabo are Germany. The United States is technically on top by raw count but France and Germany together are way ahead, and that is a different shape than the Ollama and MCP reports which were mostly a US story.
+    </p>
+
+    <figure>
+      <img src="/blog/images/vectordb/03-geo-map.png" alt="World map of Qdrant host counts by country, concentrated in the US and Europe" />
+      <figcaption>Top countries by host count. The dark cluster across France, Germany and the US tells the story, this is a European heavy population.</figcaption>
+    </figure>
+
+    <table class="data-table">
+      <thead><tr><th>Country</th><th class="num">Hosts</th><th class="num">Share</th></tr></thead>
+      <tbody>
+        <tr><td>United States</td><td class="num">1,615</td><td class="num">19.2%</td></tr>
+        <tr><td>France</td><td class="num">1,559</td><td class="num">18.6%</td></tr>
+        <tr><td>Germany</td><td class="num">1,544</td><td class="num">18.4%</td></tr>
+        <tr><td>China</td><td class="num">588</td><td class="num">7.0%</td></tr>
+        <tr><td>Finland</td><td class="num">424</td><td class="num">5.1%</td></tr>
+        <tr><td>Singapore</td><td class="num">333</td><td class="num">4.0%</td></tr>
+        <tr><td>India</td><td class="num">267</td><td class="num">3.2%</td></tr>
+        <tr><td>Netherlands</td><td class="num">238</td><td class="num">2.8%</td></tr>
+      </tbody>
+    </table>
+
+    <h2>What people are actually storing</h2>
+    <p>
+      I took all 32,670 collection names from the open instances and bucketed them by what they seem to be, using the names only. This is rough, names lie sometimes and a lot of them are gibberish UUIDs, but the shape is clear enough. Knowledge bases and documents are the big one, then AI agent memory, then a big pile of test and demo and tutorial leftovers.
+    </p>
+    <table class="data-table">
+      <thead><tr><th>Category</th><th class="num">Collection names</th></tr></thead>
+      <tbody>
+        <tr><td>Knowledge base and documents</td><td class="num">6,033</td></tr>
+        <tr><td>Agent and AI memory</td><td class="num">2,373</td></tr>
+        <tr><td>Code, technical, test and demo</td><td class="num">2,110</td></tr>
+        <tr><td>Commerce and product</td><td class="num">1,112</td></tr>
+        <tr><td>Personal and media</td><td class="num">307</td></tr>
+        <tr><td>Medical and biometric</td><td class="num">261</td></tr>
+        <tr><td>Legal</td><td class="num">178</td></tr>
+        <tr><td>Customer, CRM and sales</td><td class="num">170</td></tr>
+        <tr><td>Finance</td><td class="num">83</td></tr>
+        <tr><td>Uncategorized</td><td class="num">20,043</td></tr>
+      </tbody>
+    </table>
+    <p>
+      The uncategorized pile is mostly random hashes and project specific names that do not match a keyword, that is expected. The categories that should make you wince are the small ones near the bottom, medical, legal, finance, customer data, because those are real people's information and there are hundreds of collections of it sitting open.
+    </p>
+
+    <h3>The same setup, over and over</h3>
+    <p>
+      I fingerprinted each open instance by hashing its set of collection names, so two instances with the identical set get the same hash. 45 of these clusters had three or more members, which means the same template or the same operator deployed the same thing repeatedly and left it open every time. The SEO outfit with 232 instances was the biggest by a mile. There was also a cluster of facial recognition deployments all named <code>FACES_0</code> through <code>FACES_3</code> showing up across a bunch of separate hosts, same idea, one template copied around and never secured.
+    </p>
+
+    <h2>The ones that made me sit up</h2>
+    <p>
+      Out of the 3,047 open instances with data, 255 had collection names that pretty clearly pointed at sensitive or regulated information, that is about 8.4%. I pulled the full host record for the worst handful to understand what I was looking at. I am not publishing IPs or domains here, because these are real systems that are still open and the whole point is to not make things worse. Descriptions only.
+    </p>
+
+    <figure>
+      <img src="/blog/images/vectordb/06-notable-legal.png" alt="Censys host detail for a legal AI assistant service, identifying details redacted" />
+      <figcaption>One of the notable hosts, a legal AI assistant. The vector database was open and the broader stack was reachable too. Domain, names and fingerprints redacted before publishing.</figcaption>
+    </figure>
+
+    <p>A few that stood out, all open, no auth:</p>
+    <ul class="key-list">
+      <li>A box running a combined legal AI and telemedicine operation, with 160 collections mixing medical court case records and legal documents. Same operator, both kinds of data, both reachable.</li>
+      <li>A named AI startup's development and staging environment on a major cloud, 333 collections covering bank risk, invoices, and insurance KYC forms, and the vector database was not alone, the document database and the LLM logging tool were sitting open next to it.</li>
+      <li>A healthcare platform with 844 collections including clinical knowledge bases, prescription details, and labeled client data.</li>
+      <li>A recruiting platform exposing collections full of candidate resumes, which is a tidy pile of applicant PII for anyone who wanted it.</li>
+      <li>A facial recognition deployment storing face embeddings, with a database server exposed right beside it.</li>
+      <li>An indexing service with bank, resume, and customer collections, and an open SQL Server sitting on the same host for good measure.</li>
+    </ul>
+    <p>
+      The pattern that kept repeating is that the vector database is almost never alone. The careless person who exposed Qdrant usually exposed the whole stack, the model runner, the document store, the dashboard, sometimes a real SQL database, all on the same box. So the vector database exposure is really a symptom of somebody standing up an entire AI setup from a tutorial and never locking any of the doors.
+    </p>
+
+    <div class="callout-note">
+      <strong>The internet lies sometimes.</strong> Not every scary looking instance is real. Some are honeypots, some are test data somebody made up, some are decoys. I flagged these by their names and their exposure, I did not open them up to confirm, so I am treating them as leads and describing them carefully rather than making hard claims about whose data it is.
+    </div>
+
+    <h2>What about the other engines</h2>
+    <p>
+      Qdrant is one vector database out of several, so a fair question is whether it is just unusually careless or whether this is a whole category problem. To check, I pointed the exact same pipeline at Weaviate, another popular self hosted one. Same idea, find them on Censys, probe the listing endpoint, never touch the data.
+    </p>
+    <p>
+      Weaviate has a clean fingerprint, it answers on port 8080 and its API politely tells you about itself, you can see it in the response pointing at <code>/v1/meta</code> and the schema endpoints. That made it easy to find a trustworthy population, 1,065 in Censys, 1,011 unique after dedup.
+    </p>
+
+    <figure>
+      <img src="/blog/images/vectordb/07-weaviate-population.png" alt="Censys search results showing 1,065 Weaviate hosts" />
+      <figcaption>The Weaviate population. Both example hosts matched on the weaviate.io reference its API returns in the body. Identifying details redacted.</figcaption>
+    </figure>
+
+    <figure>
+      <img src="/blog/images/vectordb/09-weaviate-host.png" alt="Censys host detail showing a Weaviate API response advertising its schema endpoints" />
+      <figcaption>A Weaviate instance on 8080. Its own API response lists the meta and schema endpoints, which is the clean signal I keyed the search on. IP and hashes redacted.</figcaption>
+    </figure>
+
+    <p>
+      One thing about Weaviate that is worth being careful about. Its auth model is different from Qdrant. Qdrant is basically a yes or no, either <code>/collections</code> answers or it does not. Weaviate often lets you read the schema, meaning the list of classes, even on instances that are otherwise locked down, because anonymous schema reads are kind of baked in. So when I say a Weaviate instance was open, I mean its class structure was readable, which is a slightly lower bar than full access. I want to be upfront about that because flattening the two engines into one number would be sloppy.
+    </p>
+    <p>
+      Even with that softer bar, Weaviate came out more locked down than Qdrant. Of 837 reachable instances, 57.7% exposed their schema and 42.3% wanted auth. Qdrant was 73.5% open. So Weaviate operators are doing better, not great, but better.
+    </p>
+
+    <table class="data-table">
+      <thead><tr><th>Engine</th><th class="num">Probed</th><th class="num">Reachable</th><th class="num">Open</th><th class="num">Sensitive (of open)</th></tr></thead>
+      <tbody>
+        <tr><td>Qdrant</td><td class="num">6,113</td><td class="num">5,918</td><td class="num accent">73.5%</td><td class="num">8.4%</td></tr>
+        <tr><td>Weaviate</td><td class="num">1,011</td><td class="num">837</td><td class="num accent">57.7%</td><td class="num">17.0%</td></tr>
+      </tbody>
+    </table>
+
+    <p>
+      Here is the twist though. Weaviate is more locked down overall, but the ones that are open lean more sensitive, 17% of open Weaviate instances had class names pointing at regulated or personal data versus 8.4% for Qdrant. Digging into why, a big chunk of it is legal. There is a cluster of 26 Weaviate hosts all running the same legal AI template, classes named things like <code>LegalText</code> and <code>AgenticCaseMaterialChunk</code>, all open. The same copy and paste deployment problem I saw with the SEO fleet on Qdrant, just pointed at law firms this time.
+    </p>
+
+    <figure>
+      <img src="/blog/images/vectordb/10-weaviate-legal.png" alt="Censys host detail for an AI powered legal automation platform, redacted" />
+      <figcaption>One of the legal cluster hosts, an AI powered legal automation platform. The web frontend was on 443 and 3001 and its Weaviate was on 8080, same box, all reachable. Identifying details redacted.</figcaption>
+    </figure>
+
+    <figure>
+      <img src="/blog/images/vectordb/08-weaviate-asn.png" alt="Censys breakdown of Weaviate hosts by autonomous system" />
+      <figcaption>Weaviate by hosting provider. AWS and Amazon networks show up higher here than they did for Qdrant, but the budget VPS names are still all over it.</figcaption>
+    </figure>
+
+    <p>
+      The class names skew toward knowledge bases and legal rather than the agent memory and chatbot stuff that dominated Qdrant, which makes sense, Weaviate gets pitched more at enterprise search and document use. Versions were spread across 1.24 through 1.34 with nothing dominant.
+    </p>
+
+    <h3>Why I skipped Chroma</h3>
+    <p>
+      I wanted to do Chroma too, it is the third big name, but I left it out on purpose and I would rather say why than fake a number. Chroma is mostly run embedded, meaning it lives inside a Python process rather than as a network service you can knock on, so the part of it that shows up as an exposed port is small to begin with. On top of that the fingerprint was murky, the broad search was full of false positives because the word chroma shows up in unrelated things, and the tight searches either collapsed to almost nothing or matched generic API paths. I could confirm somewhere between 153 and a few hundred real ones, but I could not get a number I trusted the way I trust the Qdrant and Weaviate ones. So rather than publish a shaky figure I am leaving Chroma as a known gap. If anything the fact that Chroma barely shows up as a network service is itself the interesting bit, the embedded ones are not exposed this way at all.
+    </p>
+
+    <h2>So what</h2>
+    <p>
+      If these databases shipped with the lock on, or even just yelled at you on startup that you were exposed to the whole internet, most of this would not exist. The fix is genuinely small on each individual box, set an API key, put it behind a firewall, do not bind it to a public IP. The problem is that nobody knows they need to, because everything works fine from where they are sitting and nothing tells them otherwise.
+    </p>
+    <p>
+      This has happened before with other databases. MongoDB and Elasticsearch had the exact same open by default mess years ago, researchers measured it and made noise, the vendors changed the defaults, and the exposure dropped a lot. Vector databases are sitting right in the middle of that same cycle now. Orca pushed on it, this is me pushing on it a little more, and hopefully a few more people do too, because that is the thing that actually moves a vendor to flip a default. The tooling exploded faster than the security habits did, and there are a few thousand people who have no idea their AI's memory is an open book.
+    </p>
+    <p>
+      An exposed model is one thing. An exposed vector database is the filing cabinet, and a lot of these filing cabinets have medical records and legal cases and bank data in them, with the drawer hanging open. I did not touch any of it, but I also was almost certainly not the first person to come knocking, and that is the part worth fixing.
+    </p>
+
+    <div class="newsletter-cta inline">
+      <h2 class="newsletter-cta-heading">Liked this?</h2>
+      <p class="newsletter-cta-sub">
+        I write one of these a month. Drop your email below to get new posts
+        and research in your inbox. No spam.
+      </p>
+      <form
+        action="https://buttondown.com/api/emails/embed-subscribe/ghostinthebit"
+        method="post"
+        class="embeddable-buttondown-form"
+        target="popupwindow"
+      >
+        <label for="bd-email">Enter your email</label>
+        <input type="email" name="email" id="bd-email" placeholder="your@email.com" required />
+        <input type="submit" value="Subscribe" />
+        <p>
+          <a href="https://buttondown.com/refer/ghostinthebit" target="_blank" rel="noopener">
+            Powered by Buttondown.
+          </a>
+        </p>
+      </form>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p><span id="footer-year"></span> · Ghost in the Bit</p>
+  </footer>
+  <script type="module">
+    import { renderSiteNav } from "/platform/lib/site-nav.js";
+    renderSiteNav(document.getElementById("site-nav-inline"), "blog");
+    document.getElementById("footer-year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>

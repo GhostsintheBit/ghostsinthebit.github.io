@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ghost in the Bit — Investigation training, scraping research, and the Phantom Feed platform</title>
+  <meta name="description" content="Notes, training material, and a browser-based investigation workbench for practicing scraping, abuse, and fraud detection." />
+  <link rel="icon" type="image/x-icon" href="/images/favicons/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicons/favicon-16x16.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicons/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/images/favicons/favicon-192x192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicons/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <link rel="stylesheet" href="/platform/styles/core.css" />
+  <style>
+    .hero {
+      padding: 80px 24px 48px;
+      max-width: 920px;
+      margin: 0 auto;
+      text-align: center;
+    }
+    .hero h1 {
+      font-size: 2.6rem;
+      margin: 0 0 16px;
+      line-height: 1.15;
+    }
+    .hero-tag {
+      color: var(--text-2);
+      font-size: 1.1rem;
+      max-width: 600px;
+      margin: 0 auto 32px;
+    }
+    .hero-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .hero-actions .primary-btn,
+    .hero-actions .ghost-btn {
+      padding: 12px 22px;
+      font-size: 0.95rem;
+    }
+    .feature-grid {
+      max-width: 980px;
+      margin: 48px auto 0;
+      padding: 0 24px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+    }
+    .feature-card {
+      background: var(--bg-1);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-3);
+      padding: var(--space-5);
+    }
+    .feature-card h3 {
+      margin: 0 0 8px;
+      font-size: 1rem;
+      color: var(--accent-2);
+    }
+    .feature-card p {
+      margin: 0;
+      font-size: 0.92rem;
+      color: var(--text-1);
+    }
+    .section {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: var(--space-7) var(--space-5);
+    }
+    .scenario-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      margin-top: 24px;
+    }
+    .scenario-card {
+      background: var(--bg-1);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-3);
+      padding: var(--space-5);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+      transition: all 0.15s ease;
+    }
+    .scenario-card:hover {
+      border-color: var(--border-strong);
+      background: var(--bg-2);
+    }
+    .scenario-card h3 {
+      margin: 0;
+      font-size: 1.05rem;
+    }
+    .scenario-card-meta {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .scenario-card p {
+      margin: 0;
+      color: var(--text-2);
+      font-size: 0.88rem;
+    }
+    .scenario-card-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: auto;
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <a href="/" class="brand"><span class="brand-mark">◯</span><span class="brand-name">Ghost in the Bit</span></a>
+    <nav class="site-nav-inline" id="site-nav-inline"></nav>
+  </header>
+
+  <section class="hero">
+    <h1>Investigation training, in your browser.</h1>
+    <p class="hero-tag">
+      Ghost in the Bit is a notebook and a workbench. Field notes on scraping,
+      abuse, and rate-limit research — paired with a browser-based SQL console
+      where you can practice the same investigations on realistic synthetic
+      traffic, no install required.
+    </p>
+    <div class="hero-actions">
+      <a class="primary-btn" href="/platform/console.html">Open the console</a>
+      <a class="ghost-btn" href="/blog/">Read the blog</a>
+    </div>
+  </section>
+
+  <section class="feature-grid">
+    <div class="feature-card">
+      <h3>Realistic data</h3>
+      <p>Synthetic HTTP traffic with believable JA4 fingerprints, ASN distributions, partner integrations, and noise. Designed to mislead investigators who lean on a single signal.</p>
+    </div>
+    <div class="feature-card">
+      <h3>Runs in your browser</h3>
+      <p>SQLite via WebAssembly. No server, no account, no install. Load a scenario, write SQL, run it. All data stays on your device.</p>
+    </div>
+    <div class="feature-card">
+      <h3>Progressive difficulty</h3>
+      <p>Each scenario ships with instructions, progressive hints, and sample queries — so you can think through the problem, get unstuck, and ground your answer in real SQL.</p>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Available scenarios</h2>
+    <div class="scenario-cards">
+      <div class="scenario-card">
+        <h3>Logged-Out Web Scrape</h3>
+        <div class="scenario-card-meta">
+          <span class="difficulty-pill" data-level="beginner">beginner</span>
+          <span class="category-pill">scraping</span>
+        </div>
+        <p>
+          A web property sees unusual logged-out traffic. Determine whether
+          scraping is occurring, who is responsible, and what they're targeting.
+          Stacks cookie state, JA4, and ASN reputation signals.
+        </p>
+        <div class="scenario-card-actions">
+          <a class="primary-btn" href="/platform/console.html?scenario=01-logged-out-scrape">Open</a>
+          <a class="ghost-btn" href="/scenarios/01-logged-out-scrape/instructions.html">Brief</a>
+        </div>
+      </div>
+      <div class="scenario-card">
+        <h3>Logged-In Mobile API Abuse</h3>
+        <div class="scenario-card-meta">
+          <span class="difficulty-pill" data-level="intermediate">intermediate</span>
+          <span class="category-pill">scraping</span>
+        </div>
+        <p>
+          A mobile API integration shows odd behavior. Identify the bad actor,
+          attribute their infrastructure, and explain how they're enumerating
+          partner-scoped graph endpoints across thousands of user accounts.
+        </p>
+        <div class="scenario-card-actions">
+          <a class="primary-btn" href="/platform/console.html?scenario=02-logged-in-mobile-scrape">Open</a>
+          <a class="ghost-btn" href="/scenarios/02-logged-in-mobile-scrape/instructions.html">Brief</a>
+        </div>
+      </div>
+      <div class="scenario-card">
+        <h3>Insider Data Exfiltration</h3>
+        <div class="scenario-card-meta">
+          <span class="difficulty-pill" data-level="intermediate">intermediate</span>
+          <span class="category-pill">insider threat</span>
+        </div>
+        <p>
+          An employee may be exfiltrating data before leaving for a competitor.
+          Five-table dataset. Build per-employee baselines, detect within-person
+          deviation, and rule out two documented false-positive distractors
+          (a role change and PTO catch-up).
+        </p>
+        <div class="scenario-card-actions">
+          <a class="primary-btn" href="/platform/console.html?scenario=03-insider-exfil">Open</a>
+          <a class="ghost-btn" href="/scenarios/03-insider-exfil/instructions.html">Brief</a>
+        </div>
+      </div>
+      <div class="scenario-card">
+        <h3>The Living Investigation</h3>
+        <div class="scenario-card-meta">
+          <span class="difficulty-pill" data-level="hard">hard</span>
+          <span class="category-pill">scraping</span>
+        </div>
+        <p>
+          Thirty days of an evolving attack. Reconstruct eight distinct phases of
+          attacker tactics and defensive responses from the data alone — naïve
+          scrape → proxies → JA4 swap → cookie bypass → fake accounts →
+          CAPTCHA-solving. The capstone.
+        </p>
+        <div class="scenario-card-actions">
+          <a class="primary-btn" href="/platform/console.html?scenario=04-living-investigation">Open</a>
+          <a class="ghost-btn" href="/scenarios/04-living-investigation/instructions.html">Brief</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="newsletter-cta">
+      <h2 class="newsletter-cta-heading">Get new scenarios and writeups by email</h2>
+      <p class="newsletter-cta-sub">
+        One email a month. New investigation scenarios, anti-scraping research, and
+        field notes from offensive security work. No spam, no upsells.
+      </p>
+      <form
+        action="https://buttondown.com/api/emails/embed-subscribe/ghostinthebit"
+        method="post"
+        class="embeddable-buttondown-form"
+        target="popupwindow"
+      >
+        <label for="bd-email">Enter your email</label>
+        <input type="email" name="email" id="bd-email" placeholder="your@email.com" required />
+        <input type="submit" value="Subscribe" />
+        <p>
+          <a href="https://buttondown.com/refer/ghostinthebit" target="_blank" rel="noopener">
+            Powered by Buttondown.
+          </a>
+        </p>
+      </form>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Recent writing</h2>
+    <p style="color: var(--text-2);">
+      Notes from research, with identifying details
+      changed and/or redacted for confidentiality.
+    </p>
+    <ul class="blog-list" style="margin-top: 24px;">
+      <li class="blog-list-item">
+        <h2><a href="/blog/scan-coverage-followup.html">What a Scan Can and Cannot Tell You</a></h2>
+        <p class="excerpt">A follow up to the exposed vector database study. I loaded the scan data
+    into BigQuery and measured what you can classify from scan data alone
+    versus what needs an active probe. One signal is cheap to add. One gap
+    cannot be closed by scanning harder.</p>
+      </li>
+      <li class="blog-list-item">
+        <h2><a href="/blog/phoenix-observability-exposure.html">The AI Writes Down Everything You Say, and Most of It Is Wide Open</a></h2>
+        <p class="excerpt">The layer that logs what people actually say to their AI apps, the prompts
+  and the responses, sitting on the open internet. I found 274 instances and
+  71 percent had no authentication at all. Enumerate only, nothing read.</p>
+      </li>
+      <li class="blog-list-item">
+        <h2><a href="/blog/exposed-vector-databases.html">The AI Remembers Everything, and a Lot of It Is Wide Open</a></h2>
+        <p class="excerpt">A reproducible Censys based measurement of exposed Qdrant and Weaviate vector databases. 73.5% of reachable Qdrant instances required no authentication, with medical, legal, and financial data sitting open. Enumerate only methodology, no stored data accessed.</p>
+      </li>
+      <li class="blog-list-item">
+        <h2><a href="/blog/what-i-built-and-why.html">What I Built and Why</a></h2>
+        <p class="excerpt">Why I built Phantom Feed, the gap it fills, and who it is for. The launch post.</p>
+      </li>
+      <li class="blog-list-item">
+        <h2><a href="/blog/">All posts →</a></h2>
+      </li>
+    </ul>
+  </section>
+
+  <footer class="site-footer">
+    <p>
+      <span id="footer-year"></span> · Ghost in the Bit · Built by
+      <a href="https://github.com/GhostsintheBit/" target="_blank" rel="noopener">GhostsintheBit</a>
+    </p>
+  </footer>
+
+  <script type="module">
+    import { renderSiteNav } from "/platform/lib/site-nav.js";
+    renderSiteNav(document.getElementById("site-nav-inline"), "home");
+    document.getElementById("footer-year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>

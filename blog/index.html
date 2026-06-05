@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Blog — Ghost in the Bit</title>
+  <link rel="icon" type="image/x-icon" href="/images/favicons/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicons/favicon-16x16.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicons/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/images/favicons/favicon-192x192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicons/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <link rel="stylesheet" href="/platform/styles/core.css" />
+</head>
+<body>
+  <header class="site-header">
+    <a href="/" class="brand"><span class="brand-mark">◯</span><span class="brand-name">Ghost in the Bit</span></a>
+    <nav class="site-nav-inline" id="site-nav-inline"></nav>
+  </header>
+
+  <main class="page-container">
+    <header style="margin-bottom: 32px;">
+      <h1>Blog</h1>
+      <p style="color: var(--text-2); max-width: 640px;">
+        Field notes from offensive security work, scraping research, and
+        rate-limit investigations. Identifying details are changed for
+        client confidentiality.
+      </p>
+    </header>
+
+    <ul class="blog-list">
+<li class="blog-list-item">
+  <h2><a href="/blog/scan-coverage-followup.html">What a Scan Can and Cannot Tell You</a></h2>
+  <p class="excerpt">
+    A follow up to the exposed vector database study. I loaded the scan data
+    into BigQuery and measured what you can classify from scan data alone
+    versus what needs an active probe. One signal is cheap to add. One gap
+    cannot be closed by scanning harder.
+  </p>
+  <div class="post-meta">
+    <span>Measurement</span> · <span>9 min read</span>
+  </div>
+</li>
+    <li class="blog-list-item">
+  <h2><a href="/blog/phoenix-observability-exposure.html">The AI Writes Down Everything You Say, and Most of It Is Wide Open</a></h2>
+  <p class="excerpt">
+  The layer that logs what people actually say to their AI apps, the prompts
+  and the responses, sitting on the open internet. I found 274 instances and
+  71 percent had no authentication at all. Enumerate only, nothing read.
+  </p>
+  <div class="post-meta">
+    <span>Research</span> · <span>10 min read</span>
+  </div>
+</li>
+      <li class="blog-list-item">
+        <h2><a href="/blog/exposed-vector-databases.html">The AI Remembers Everything, and a Lot of It Is Wide Open</a></h2>
+        <p class="excerpt">
+          A reproducible Censys based measurement of exposed Qdrant and Weaviate
+          vector databases. 73.5% of reachable Qdrant instances required no
+          authentication, with medical, legal, and financial data sitting open.
+          Enumerate only methodology, no stored data accessed.
+        </p>
+        <div class="post-meta">
+          <span>Research</span> · <span>14 min read</span>
+        </div>
+      </li>
+
+      <li class="blog-list-item">
+        <h2><a href="/blog/what-i-built-and-why.html">What I Built and Why</a></h2>
+        <p class="excerpt">
+          Why I built Phantom Feed, a browser based SQL workbench for
+          practicing scraping and abuse investigations on realistic synthetic
+          traffic. The gap it fills, what is in it, and who it is for.
+        </p>
+        <div class="post-meta">
+          <span>Platform</span> · <span>6 min read</span>
+        </div>
+      </li>
+
+      <li class="blog-list-item">
+        <h2><a href="/blog/practical-look-at-scraping-behavior.html">A Practical Look at Scraping Behavior</a></h2>
+        <p class="excerpt">
+          How sophisticated scrapers shape their traffic to blend in, why
+          single-signal detection fails, and which behavioral patterns still
+          give them away when you stack signals correctly.
+        </p>
+        <div class="post-meta">
+          <span>Scraping</span> · <span>Long read</span>
+        </div>
+      </li>
+
+      <li class="blog-list-item">
+        <h2><a href="/blog/bots-and-scrapers.html">Bots and Scrapers: Motivations, Tactics, and Defenses</a></h2>
+        <p class="excerpt">
+          A field guide to who runs scraping operations, what they're after,
+          and what realistic defenses look like beyond the obvious blocklist.
+        </p>
+        <div class="post-meta">
+          <span>Scraping</span> · <span>Defenses</span>
+        </div>
+      </li>
+
+      <li class="blog-list-item">
+        <h2><a href="/blog/tokens-and-cookies.html">A Tale of Tokens, Cookies, and Curious Behaviors</a></h2>
+        <p class="excerpt">
+          A mobile-API rate limit that reset itself once a generic cookie was
+          added to the request. The mechanics of why this happens and what
+          rate-limit-key design choices invite it.
+        </p>
+        <div class="post-meta">
+          <span>Rate limits</span> · <span>Bypass</span>
+        </div>
+      </li>
+
+      <li class="blog-list-item">
+        <h2><a href="/blog/cookie-header-bypass.html">Rediscovering a Rate Limit Bypass: Cookie Header Strikes Again</a></h2>
+        <p class="excerpt">
+          A second encounter with a cookie-vs-token rate-limit bypass on a
+          different platform, and what it tells us about how often this
+          pattern recurs across the industry.
+        </p>
+        <div class="post-meta">
+          <span>Rate limits</span> · <span>Bypass</span>
+        </div>
+      </li>
+
+      <li class="blog-list-item">
+        <h2><a href="/blog/host-header-swap.html">Bypassing Rate Limits Using The Host Header</a></h2>
+        <p class="excerpt">
+          Two domains sharing one backend but tracking rate limits separately.
+          A simple Host header swap multiplied the allowable request budget.
+        </p>
+        <div class="post-meta">
+          <span>Rate limits</span> · <span>Bypass</span>
+        </div>
+      </li>
+
+      <li class="blog-list-item">
+        <h2><a href="/blog/sandbox-breakout.html">Sandboxed Escaping</a></h2>
+        <p class="excerpt">
+          A sandbox test user that was supposed to be isolated turned out to
+          have a quiet path into a sister platform's real user data. The
+          token mechanics that made it possible.
+        </p>
+        <div class="post-meta">
+          <span>Authorization</span> · <span>Sandbox</span>
+        </div>
+      </li>
+    </ul>
+  </main>
+
+  <footer class="site-footer">
+    <p><span id="footer-year"></span> · Ghost in the Bit</p>
+  </footer>
+  <script type="module">
+    import { renderSiteNav } from "/platform/lib/site-nav.js";
+    renderSiteNav(document.getElementById("site-nav-inline"), "blog");
+    document.getElementById("footer-year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>

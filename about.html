@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>About — Ghost in the Bit</title>
+  <link rel="icon" type="image/x-icon" href="/images/favicons/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicons/favicon-16x16.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicons/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/images/favicons/favicon-192x192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicons/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <link rel="stylesheet" href="/platform/styles/core.css" />
+</head>
+<body>
+  <header class="site-header">
+    <a href="/" class="brand"><span class="brand-mark">◯</span><span class="brand-name">Ghost in the Bit</span></a>
+    <nav class="site-nav-inline" id="site-nav-inline"></nav>
+  </header>
+
+  <main class="article">
+    <header class="article-header">
+      <h1 class="article-title">About</h1>
+    </header>
+
+    <p>
+      Ghost in the Bit is a personal project — part field notebook, part
+      teaching tool. It collects observations from offensive security work
+      and turns the recurring patterns into practice scenarios that anyone
+      can run in their browser.
+    </p>
+
+    <h2>Why it exists</h2>
+    <p>
+      Most investigators learn the craft on production data they can't talk
+      about, in tools they can't show off. That leaves a gap: there's no
+      shared, public, realistic environment to practice traffic analysis in.
+      Ghost in the Bit tries to be that environment — with synthetic data,
+      real signal coverage, and the analytical reasoning written out so the
+      learning is reproducible.
+    </p>
+
+    <h2>What you'll find here</h2>
+    <ul>
+      <li>
+        <strong>The Phantom Feed platform</strong> — a browser-based SQL
+        workbench with scenario-driven investigation training. Pick a
+        scenario, get a synthetic HTTP log dataset, and work the case.
+      </li>
+      <li>
+        <strong>The blog</strong> — short, practical writeups of real
+        techniques (rate-limit bypasses, fingerprinting, host-header attacks,
+        sandbox escapes), with identifying details changed for client
+        confidentiality.
+      </li>
+      <li>
+        <strong>The generator</strong> — the open-source Python tool used to
+        produce the platform's scenarios, so you can see how realistic
+        adversarial datasets are constructed. Build your own.
+      </li>
+    </ul>
+
+    <h2>Stay in touch</h2>
+    <p>
+      Code lives on
+      <a href="https://github.com/GhostsintheBit/" target="_blank" rel="noopener">GitHub</a>.
+      Public conversation happens on
+      <a href="https://x.com/GhostintheBit" target="_blank" rel="noopener">X (@GhostintheBit)</a>.
+      Feedback and ideas for new scenarios are welcome.
+    </p>
+
+    <div class="newsletter-cta compact">
+      <h2 class="newsletter-cta-heading">Subscribe to the newsletter</h2>
+      <p class="newsletter-cta-sub">
+        One email a month. New scenarios, investigation writeups, and field notes.
+      </p>
+      <form
+        action="https://buttondown.com/api/emails/embed-subscribe/ghostinthebit"
+        method="post"
+        class="embeddable-buttondown-form"
+        target="popupwindow"
+      >
+        <label for="bd-email">Enter your email</label>
+        <input type="email" name="email" id="bd-email" placeholder="your@email.com" required />
+        <input type="submit" value="Subscribe" />
+        <p>
+          <a href="https://buttondown.com/refer/ghostinthebit" target="_blank" rel="noopener">
+            Powered by Buttondown.
+          </a>
+        </p>
+      </form>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p><span id="footer-year"></span> · Ghost in the Bit</p>
+  </footer>
+  <script type="module">
+    import { renderSiteNav } from "/platform/lib/site-nav.js";
+    renderSiteNav(document.getElementById("site-nav-inline"), "about");
+    document.getElementById("footer-year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>

@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>What a Scan Can and Cannot Tell You — Ghost in the Bit</title>
+  <meta name="description" content="Two layers of the AI stack, measured the same way and analyzed in BigQuery. What you can classify about an exposed service from scan data alone, what needs an active probe, and where it runs out. Enumerate only, no stored data accessed." />
+  <link rel="icon" type="image/x-icon" href="/images/favicons/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicons/favicon-16x16.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicons/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/images/favicons/favicon-192x192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicons/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <link rel="stylesheet" href="/platform/styles/core.css" />
+  <style>
+    /* Report-specific additions, built from core.css tokens so it stays native */
+    .stat-callout {
+      background: var(--bg-1);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-3);
+      padding: var(--space-6) var(--space-5);
+      margin: var(--space-6) 0;
+      text-align: center;
+    }
+    .stat-callout .num {
+      font-size: 3.0rem;
+      font-weight: 700;
+      color: var(--accent-2);
+      line-height: 1.05;
+      letter-spacing: -0.02em;
+    }
+    .stat-callout .cap {
+      margin-top: var(--space-3);
+      color: var(--text-2);
+      font-size: 0.95rem;
+    }
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: var(--space-5) 0;
+      font-size: 0.9rem;
+    }
+    .data-table th, .data-table td {
+      text-align: left;
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--border-soft);
+    }
+    .data-table thead th {
+      color: var(--text-2);
+      font-weight: 600;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-bottom: 1px solid var(--border-strong);
+    }
+    .data-table td.num, .data-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .data-table tbody tr:hover { background: var(--bg-2); }
+    .data-table .accent { color: var(--accent-2); font-weight: 600; }
+    .data-table .muted td { color: var(--text-3); }
+    .key-list { list-style: none; padding: 0; margin: var(--space-4) 0; }
+    .key-list li {
+      position: relative;
+      padding: 10px 0 10px 22px;
+      border-bottom: 1px solid var(--border-soft);
+      color: var(--text-1);
+    }
+    .key-list li::before {
+      content: "";
+      position: absolute; left: 0; top: 17px;
+      width: 8px; height: 8px;
+      background: var(--accent);
+      transform: rotate(45deg);
+    }
+    .callout-note {
+      background: var(--bg-2);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 var(--radius-2) var(--radius-2) 0;
+      padding: var(--space-3) var(--space-5);
+      margin: var(--space-5) 0;
+      color: var(--text-1);
+      font-size: 0.95rem;
+    }
+    .callout-note strong { color: var(--text-0); }
+    .series-nav {
+      font-size: 0.9rem; color: var(--text-2);
+      background: var(--bg-1); border: 1px solid var(--border-soft);
+      border-radius: var(--radius-2); padding: var(--space-3) var(--space-4);
+      margin: var(--space-5) 0;
+    }
+    .series-nav a { color: var(--accent-2); }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <a href="/" class="brand"><span class="brand-mark">◯</span><span class="brand-name">Ghost in the Bit</span></a>
+    <nav class="site-nav-inline" id="site-nav-inline"></nav>
+  </header>
+
+  <main class="article">
+    <header class="article-header">
+      <h1 class="article-title">What a Scan Can and Cannot Tell You</h1>
+      <div class="article-meta">
+        <span class="category-pill">measurement</span>
+        <time datetime="2026-06-05">June 5, 2026</time>
+        <span>Internet measurement</span>
+        <span>12 min read</span>
+      </div>
+    </header>
+
+    <div class="series-nav">
+      This is the analysis piece that sits on top of two earlier studies: exposed
+      <a href="/blog/exposed-vector-databases.html">vector databases</a> (the storage layer) and exposed
+      <a href="/blog/phoenix-observability-exposure.html">AI observability tools</a> (the conversation
+      layer). Here I put both datasets in BigQuery and ask the same question of them.
+    </div>
+
+    <p>
+      I have now measured two different layers of the AI stack the same way. First the vector databases,
+      the place an app keeps the knowledge it was given. Then the observability tools, the place an app
+      logs the live conversation, the prompts and the responses. Two layers, same method, two clean
+      datasets. This post is not another exposure number. It is the question underneath both of them:
+      when you find a population of services like this, how much can you actually classify about them
+      from scan data alone, and where does scan data run out of road?
+    </p>
+
+    <p>
+      That question is the whole job in a lot of internet measurement work, so I wanted to answer it
+      with the data in front of me rather than wave at it. I loaded both populations into BigQuery and
+      looked at three things you might want to know about any exposed service. Each one behaves
+      differently, and comparing the two layers is where it gets interesting.
+    </p>
+
+    <h2>The short version</h2>
+    <ul class="key-list">
+      <li>Two layers of the AI stack, measured the same way, both came back around <strong>70 percent open</strong>: 73.5 percent of reachable vector databases and 71 percent of reachable observability instances had no authentication.</li>
+      <li><strong>Identifying the service</strong> is nearly free from existing scan data. <strong>Posture</strong> (open or locked) is invisible to the banner and needs one active probe. <strong>Content</strong> (what is actually inside) hits a hard ceiling.</li>
+      <li>Posture is not even binary. On the observability layer, every instance that had authentication switched on still had an API answering unauthenticated requests, so the usual open versus locked label misclassifies them as secure.</li>
+      <li>The hosting pattern flipped between the two layers. The big clouds were the most locked down on the storage layer and the most open on the conversation layer. Same providers, opposite result, for a reason worth explaining.</li>
+    </ul>
+
+    <div class="callout-note">
+      <strong>On method, up front.</strong> Both datasets were collected by me, from my own
+      infrastructure, and analyzed in a personal BigQuery sandbox. I read only what each service freely
+      advertises (a collection list, a config flag, a version) and for posture I recorded HTTP status
+      codes only. I never read a stored vector, a document, or a single trace. Everything here is
+      rounded and aggregated, with no addresses, names, or contents. The counts are floors, bounded by
+      what was indexed and the credits I spent. The full methods live in the two studies linked above.
+    </div>
+
+    <h2>The two populations</h2>
+    <table class="data-table">
+      <thead><tr><th>Layer</th><th>Tool measured</th><th class="num">Reachable</th><th class="num">Open / no auth</th></tr></thead>
+      <tbody>
+        <tr><td>Storage (the knowledge)</td><td>Qdrant</td><td class="num">5,918</td><td class="num accent">73.5%</td></tr>
+        <tr><td>Conversation log (the transcript)</td><td>Phoenix</td><td class="num">259</td><td class="num accent">71.0%</td></tr>
+      </tbody>
+    </table>
+    <p>
+      Different sizes, same posture. The storage layer is a much larger population, but both land in the
+      same place on the only number most write ups bother with. That is exactly why the more useful
+      framing is not how many are open, but what you can and cannot learn about them once you find them.
+    </p>
+
+    <h2>Classification one: what is it? Nearly free.</h2>
+    <p>
+      The first thing you want to know is what a host actually is. On both layers this is essentially
+      solved by the scan data you already have. A port plus a product fingerprint identifies the service
+      cleanly, with almost no false positives. The vector databases announce themselves on their API
+      port, and the observability instances serve a page that names the product outright. Nothing
+      interesting to report here, which is the point. Service identification is the part existing data
+      is good at, so the real work is the two questions it is bad at.
+    </p>
+
+    <h2>Classification two: open or locked? Invisible, then not even binary.</h2>
+    <p>
+      The second thing you want to know is the security posture, and this is where scan data alone falls
+      short. Knowing the port and the product tells you it is a vector database or an observability tool.
+      It does not tell you whether the front door is locked. The discriminating signal is an active one:
+      for the storage layer, whether the listing endpoint answers; for the conversation layer, a flag the
+      app injects into its own page that states whether authentication is on. One extra request per host,
+      and posture goes from a guess to a measurement.
+    </p>
+
+    <div class="stat-callout">
+      <div class="num">73.5% &nbsp;/&nbsp; 71%</div>
+      <div class="cap">open with no authentication, storage layer and conversation layer. Neither number exists in the banner.</div>
+    </div>
+
+    <p>
+      But the conversation layer taught me something the storage layer could not, because of how I had to
+      measure it. On the storage layer, posture really is close to binary: the listing endpoint either
+      answers or it refuses. On the conversation layer, I could see the auth flag and also check whether
+      the data API answered. And here is the finding I did not expect: of the instances that had
+      authentication turned on, every single one still had a data endpoint that returned a success code
+      to a request with no credentials. Every one.
+    </p>
+
+    <div class="callout-note">
+      <strong>Authenticated is not the same as secured.</strong> I want to be precise, because I held a
+      hard line on not reading anything. I recorded the status code an endpoint returned, nothing more. A
+      success code on an unauthenticated request means the login on the front of the dashboard does not
+      cover the API behind it. I did not read the responses, so I will not tell you what they contained.
+      I am telling you they answered when they should have refused. The practical consequence for
+      classification is real: a tool that labels these instances as open or locked will file them under
+      locked, because auth is configured, and be wrong about every one of them.</p>
+    </div>
+
+    <p>
+      That is the kind of thing that only shows up when you treat posture as more than a single bit. The
+      simple open versus locked question gets you the headline. The honest version of the question, does
+      the configured auth actually cover the data paths, gets you a different and more uncomfortable
+      answer.
+    </p>
+
+    <h2>Classification three: what is inside? Two kinds of ceiling.</h2>
+    <p>
+      The third thing you want to know is the most interesting and the hardest. What is actually in these
+      services? On the storage layer the only clue available without reading anything is the collection
+      names, so I treated those as a classification problem and built a keyword classifier over them in
+      BigQuery. The names are an array per host, so you flatten them with UNNEST, bucket each one with a
+      pile of regular expressions, then measure how much of the total you managed to label.
+    </p>
+
+    <pre><code>WITH names AS (
+  SELECT LOWER(c) AS name
+  FROM qdrant_hosts, UNNEST(collection_names) AS c
+  WHERE status IN ('open','empty')
+),
+classified AS (
+  SELECT CASE
+    WHEN REGEXP_CONTAINS(name, r'(patient|medical|clinic|health)') THEN 'medical'
+    WHEN REGEXP_CONTAINS(name, r'(legal|court|lawsuit|contract)')  THEN 'legal'
+    WHEN REGEXP_CONTAINS(name, r'(bank|invoice|kyc|payment)')      THEN 'finance'
+    WHEN REGEXP_CONTAINS(name, r'(knowledge|docs|document|rag)')   THEN 'knowledge_base'
+    WHEN REGEXP_CONTAINS(name, r'(mem0|memory|agent|conversation)')THEN 'agent_memory'
+    -- ... more buckets ...
+    ELSE 'uncategorized'
+  END AS category
+  FROM names
+)
+SELECT category, COUNT(*) AS names,
+  ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 1) AS pct
+FROM classified GROUP BY category ORDER BY names DESC;</code></pre>
+
+    <p>
+      After a real effort, including going back into the pile I had failed to label and expanding the
+      buckets, the classifier topped out at about 36 percent of names. The rest is a long tail of project
+      specific labels that resist any keyword rule. When I sorted the unlabeled names by frequency, the
+      most common one accounted for a fraction of a percent of the remainder and fell off a cliff from
+      there into thousands of unique one offs. That is a methodological ceiling. More scanning does not
+      lift it, because the signal that would actually tell you what is in a collection lives in the data,
+      not the name.
+    </p>
+
+    <p>
+      The conversation layer has the same question with a different ceiling, and this one is not
+      methodological, it is a line I chose not to cross. The content of an observability instance is the
+      trace data, which is to say the actual prompts people typed and the actual responses the model
+      sent back. You could read it. I would not, and did not. So on that layer the content question is
+      one I deliberately leave unanswered, because answering it means reading other people's
+      conversations, which is exactly the harm the whole project is trying to get people to fix.
+    </p>
+
+    <div class="callout-note">
+      <strong>So the content ceiling comes in two flavors.</strong> On the storage layer it is a limit of
+      keyword classification, roughly a third labeled and the rest opaque. On the conversation layer it
+      is an ethical limit, the content is readable but reading it is the thing you must not do. Either
+      way, scanning harder does not get you past it.
+    </div>
+
+    <h2>The cross layer wrinkle: hosting flipped</h2>
+    <p>
+      The most surprising result came from joining each population back to its hosting provider and
+      comparing open rates. On the storage layer the pattern was the one you would expect: budget VPS
+      providers skewed heavily open and the big clouds came in noticeably lower, because the large
+      platforms put a firewall in front of you by default and a cheap box drops you straight onto a
+      public address. The default network posture was quietly protecting careless operators.
+    </p>
+    <p>
+      On the conversation layer that protection mostly vanished, and the big clouds were among the most
+      open rather than the most locked down. Same providers, opposite result. My best read is that an
+      observability tool is a developer and notebook tool, so people deliberately open the port to reach
+      the dashboard, and a default firewall does not save you from a port you opened on purpose. A vector
+      database is more often something that got stood up and exposed by accident, where the default
+      posture still mattered. Different deployment habit, different outcome. I would rather flag the
+      reversal than pretend one tidy rule covers both layers. The per provider counts on the smaller
+      population are modest, so I am describing a direction, not pinning exact percentages.
+    </p>
+
+    <h2>The three questions, both layers, in one place</h2>
+    <table class="data-table">
+      <thead><tr><th>What you want to know</th><th>Storage layer</th><th>Conversation layer</th></tr></thead>
+      <tbody>
+        <tr><td>What is it?</td><td>Free, from the banner</td><td>Free, from the banner</td></tr>
+        <tr><td>Open or locked?</td><td class="accent">73.5% open</td><td class="accent">71% open, and binary mislabels the rest</td></tr>
+        <tr><td>What is inside?</td><td>~36% labeled, rest opaque</td><td>Deliberately not read</td></tr>
+        <tr><td>Does hosting predict posture?</td><td>Yes, clouds safer</td><td>Reversed, clouds more open</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Why this is the part worth writing down</h2>
+    <p>
+      The open rate is the number that travels, but it is the least interesting thing here. The useful
+      result is the map. Identifying a service is free. Classifying its posture needs an active probe and,
+      on at least one layer, needs you to stop pretending posture is a single bit. Classifying its
+      contents hits a wall that is methodological in one place and ethical in another. And a pattern that
+      looks like a law on one layer can reverse on the next, which is a good reminder to measure each
+      layer rather than assume the last one generalizes.
+    </p>
+    <p>
+      Both datasets are mine, both stayed read only, and both are reproducible from the methods in the
+      linked studies. If you want to do this on your own collected data, the queries are simple enough to
+      paste into any sandbox. The honest summary is that scan data tells you a lot, tells you nothing
+      about some things until you ask one more question, and tells you nothing at all about the things you
+      should not be reading in the first place.
+    </p>
+
+    <div class="series-nav">
+      The two studies this analysis is built on:
+      <a href="/blog/exposed-vector-databases.html">The AI Remembers Everything</a> (vector databases,
+      the storage layer) and
+      <a href="/blog/phoenix-observability-exposure.html">The AI Writes Down Everything You Say</a>
+      (observability tools, the conversation layer).
+    </div>
+
+    <div class="newsletter-cta inline">
+      <h2 class="newsletter-cta-heading">Liked this?</h2>
+      <p class="newsletter-cta-sub">
+        I write one of these a month. Drop your email below to get new posts
+        and research in your inbox. No spam.
+      </p>
+      <form
+        action="https://buttondown.com/api/emails/embed-subscribe/ghostinthebit"
+        method="post"
+        class="embeddable-buttondown-form"
+        target="popupwindow"
+      >
+        <label for="bd-email">Enter your email</label>
+        <input type="email" name="email" id="bd-email" placeholder="your@email.com" required />
+        <input type="submit" value="Subscribe" />
+        <p>
+          <a href="https://buttondown.com/refer/ghostinthebit" target="_blank" rel="noopener">
+            Powered by Buttondown.
+          </a>
+        </p>
+      </form>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p><span id="footer-year"></span> · Ghost in the Bit</p>
+  </footer>
+  <script type="module">
+    import { renderSiteNav } from "/platform/lib/site-nav.js";
+    renderSiteNav(document.getElementById("site-nav-inline"), "blog");
+    document.getElementById("footer-year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>
