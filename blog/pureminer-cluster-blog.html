@@ -86,7 +86,7 @@
     </div>
 
     <p>
-      I was hunting something else entirely when I stumbled into a cryptojacking operation. Three IP addresses running PureMiner mining panels, all exposing their open directories. Two of them are byte identical clones of the same Windows VM image, proven by identical RDP certificates, SMB server GUIDs, and machine names. The third is connected via a shared PowerShell dropper. One node was already known to threat feeds. Two were completely unknown. I mapped all of them, decoded the actual injected payloads, and found the operation is not just cryptojacking—it runs an AsyncRAT build configured to profile victims for cryptocurrency wallets and flag high value theft targets.
+      I was hunting something else entirely when I stumbled into a cryptojacking operation. Three IP addresses running PureMiner mining panels, all exposing their open directories. Two of them are byte identical clones of the same Windows VM image, proven by identical RDP certificates, SMB server GUIDs, and machine names. The third is connected via a shared PowerShell dropper. One node was already known to threat feeds. Two were completely unknown. I mapped all of them, decoded the actual injected payloads, and found the operation is not just cryptojacking,it runs an AsyncRAT build configured to profile victims for cryptocurrency wallets and flag high value theft targets.
     </p>
 
     <h2>The short version</h2>
@@ -104,7 +104,7 @@
     </p>
 
     <p>
-      The point is that feed coverage is not complete, and machines leave fingerprints when you look at the right data. An RDP certificate is not a mystery—it is a copy paste operation. An SMB server GUID is a cloned drive. A machine name is a template image. These are the tells that real operators do not think about.
+      The point is that feed coverage is not complete, and machines leave fingerprints when you look at the right data. An RDP certificate is not a mystery it is a copy paste operation. An SMB server GUID is a cloned drive. A machine name is a template image. These are the tells that real operators do not think about.
     </p>
 
     <h2>The nodes</h2>
@@ -132,7 +132,7 @@
       <li>usersettings.json: identical body hash, same 107 KB, timestamp 2026 05 07</li>
     </ul>
     <p>
-      The operator cloned the entire VM image to a second provider. This is not coincidence or shared tooling—this is infrastructure replication. The machine names, certificates, and GUIDs are interior state that does not get reused unless the entire disk was copied.
+      The operator cloned the entire VM image to a second provider. This is not coincidence or shared tooling, this is infrastructure replication. The machine names, certificates, and GUIDs are interior state that does not get reused unless the entire disk was copied.
     </p>
 
     <h3>128.1.79[.]99 (UCLOUD Information Technology, Bangkok TH)</h3>
@@ -193,7 +193,7 @@
     </ul>
 
     <p>
-      I first thought this was a wholly new standalone stealer. Detonating it in a sandbox corrected that. The backbone is AsyncRAT, a known family—the sample creates the signature AsyncRAT mutex <code>AsyncMutex_6SI8OkBSS</code>, which is a known default and confirms the family but does not tie it uniquely to this operator. What is distinctive here is the configuration: this build is set up to hunt cryptocurrency wallets, and it calls a fresh C2 I had not seen before.
+      I first thought this was a wholly new standalone stealer. Detonating it in a sandbox corrected that. The backbone is AsyncRAT, a known family the sample creates the signature AsyncRAT mutex <code>AsyncMutex_6SI8OkBSS</code>, which is a known default and confirms the family but does not tie it uniquely to this operator. What is distinctive here is the configuration: this build is set up to hunt cryptocurrency wallets, and it calls a fresh C2 I had not seen before.
     </p>
 
     <p>
@@ -209,7 +209,7 @@
     </p>
 
     <p>
-      <strong>2FA Detection:</strong> Checks whether Bitcoin Core has 2FA authentication enabled. This is the critical targeting filter—victims with 2FA are low value targets (harder to steal from), while victims without 2FA are flagged as high priority.
+      <strong>2FA Detection:</strong> Checks whether Bitcoin Core has 2FA authentication enabled. This is the critical targeting filter, victims with 2FA are low value targets (harder to steal from), while victims without 2FA are flagged as high priority.
     </p>
 
     <p>
@@ -315,11 +315,6 @@ effdea83c6b7a1dc2ce9e9d40e91dfd59bed9fcbd580903423648b7ca97d9696
     <p>
       The infrastructure is real, the machines are real, and the machines will behave the same way when the operator spins up the next clone. That is what the tracking signature is for.
     </p>
-
-    <p>
-      If you are in the threat intel space and you have the bandwidth to take this further—pull the payout wallet from usersettings.json and track where the operator is mining to, or keep an eye on AS135377 for new clones—I am interested. This is the kind of thing that improves when multiple eyes are on it.
-    </p>
-
     <div class="callout-note">
       <strong>Sources and methodology.</strong> Infrastructure clustering and certificate analysis via Censys Platform. Malware sample analysis via VirusTotal and local decompilation. Process injection technique cross referenced against known patterns. The AutoHotkey process hollowing pattern is a documented technique, repurposed here in a cryptojacking context.
     </div>
