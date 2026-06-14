@@ -1,17 +1,17 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cloned VM Image, Three Cryptojacking Panels, One Delivery Chain — Ghost in the Bit</title>
+  <meta charset="utf 8" />
+  <meta name="viewport" content="width=device width, initial scale=1.0" />
+  <title>Cloned VM Image, Three Cryptojacking Panels, One Delivery Chain, Ghost in the Bit</title>
   <meta name="description" content="A three node PureMiner cryptojacking cluster connected by cloned VM images and process injection staging. Mapped the infrastructure, decoded the payloads, and found an AsyncRAT build configured to profile victims for cryptocurrency wallets." />
-  <link rel="icon" type="image/x-icon" href="/images/favicons/favicon.ico" />
-  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicons/favicon-16x16.png" />
-  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicons/favicon-32x32.png" />
-  <link rel="icon" type="image/png" sizes="192x192" href="/images/favicons/favicon-192x192.png" />
-  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicons/apple-touch-icon.png" />
+  <link rel="icon" type="image/x icon" href="/images/favicons/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicons/favicon 16x16.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicons/favicon 32x32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/images/favicons/favicon 192x192.png" />
+  <link rel="apple touch icon" sizes="180x180" href="/images/favicons/apple touch icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
-  <meta name="theme-color" content="#0a0a0a" />
+  <meta name="theme color" content="#0a0a0a" />
   <link rel="stylesheet" href="/platform/styles/core.css" />
   <style>
     /* Report-specific additions, built from core.css tokens so it stays native */
@@ -65,34 +65,34 @@
   </style>
 </head>
 <body>
-  <header class="site-header">
-    <a href="/" class="brand"><span class="brand-mark">◯</span><span class="brand-name">Ghost in the Bit</span></a>
-    <nav class="site-nav-inline" id="site-nav-inline"></nav>
+  <header class="site header">
+    <a href="/" class="brand"><span class="brand mark">◯</span><span class="brand name">Ghost in the Bit</span></a>
+    <nav class="site nav inline" id="site nav inline"></nav>
   </header>
 
   <main class="article">
-    <header class="article-header">
-      <h1 class="article-title">Cloned VM Image, Three Cryptojacking Panels, One Delivery Chain</h1>
-      <div class="article-meta">
-        <span class="category-pill">research</span>
-        <time datetime="2026-06-12">June 12, 2026</time>
+    <header class="article header">
+      <h1 class="article title">Cloned VM Image, Three Cryptojacking Panels, One Delivery Chain</h1>
+      <div class="article meta">
+        <span class="category pill">research</span>
+        <time datetime="2026 06 12">June 12, 2026</time>
         <span>Threat hunting</span>
         <span>22 min read</span>
       </div>
     </header>
 
-    <div class="callout-note">
+    <div class="callout note">
       <strong>One note before we start.</strong> I am not a malware reverse engineer by trade. What I am decent at is the part that comes before the deep reversing: noticing something that does not add up, pulling the thread methodically, and refusing to overclaim. I would rather be the person who says I am not sure, let me verify, than the one who confidently ships something wrong.
     </div>
 
     <p>
-      I was hunting something else entirely when I stumbled into a cryptojacking operation. Three IP addresses running PureMiner mining panels, all exposing their open directories. Two of them are byte identical clones of the same Windows VM image, proven by identical RDP certificates, SMB server GUIDs, and machine names. The third is connected via a shared PowerShell dropper. One node was already known to threat feeds. Two were completely unknown. I mapped all of them, decoded the actual injected payloads, and found the operation is not just cryptojacking,it runs an AsyncRAT build configured to profile victims for cryptocurrency wallets and flag high value theft targets.
+      I was hunting something else entirely when I stumbled into a cryptojacking operation. Three IP addresses running PureMiner mining panels, all exposing their open directories. Two of them are byte identical clones of the same Windows VM image, proven by identical RDP certificates, SMB server GUIDs, and machine names. The third is connected via a shared PowerShell dropper. When I checked the three nodes against the feeds, the coverage was a patchwork: one node was flagged in some places and invisible in others, and one was missing from everything I checked. I mapped all of them, decoded the actual injected payloads, and found the operation is not just cryptojacking, it runs an AsyncRAT build configured to profile victims for cryptocurrency wallets and flag high value theft targets.
     </p>
 
     <h2>The short version</h2>
-    <ul class="key-list">
+    <ul class="key list">
       <li>Three IP addresses running PureMiner cryptojacking panels, all in open directories. Two are <strong>byte identical clones</strong> of the same VM image (identical RDP certs, SMB GUIDs, machine names). The third is tied via a shared dropper.</li>
-      <li>One node is already known (AsyncRAT since Oct 2025). Two are <strong>novel</strong> (unreported in threat feeds).</li>
+      <li>Feed coverage across the three nodes is a patchwork. Checking against two separate feeds (ThreatFox and OTX), one node was known in both, one was missing from ThreatFox but already sat in 33 OTX pulses, and one was <strong>absent from both</strong>. That last one is the genuinely new node.</li>
       <li>The Bangkok node stages <strong>process injection delivery</strong> using AutoHotkey scripts that decode and hollow inject PE binaries into suspended AppLaunch.exe processes.</li>
       <li>The decoded payloads are a known AsyncRAT variant (58/76 VT detections) and a second <strong>AsyncRAT based build configured as a cryptocurrency wallet stealer</strong> that profiles victims by scanning for installed crypto wallet browser extensions and checking 2FA status.</li>
       <li>The operation is a <strong>target profiling pipeline</strong>: Stage 1 profiles victims for wallets, Stage 2 deploys crypto theft tools to high value targets.</li>
@@ -100,18 +100,18 @@
 
     <h2>How I got here</h2>
     <p>
-      I was hunting something unrelated on Censys, pivoted on a different lead entirely, and by accident landed on a PureMiner panel sitting in an open directory on a host that was also running AsyncRAT. That host was already known to the feeds. But when I pulled its details, I noticed something odd: the RDP certificate and SMB server fingerprints looked like they had been copied byte for byte to another host on a different provider. Then a third node turned up in the dropper configuration. By the time I was done, I had three nodes, two of which were unknown, all connected by infrastructure forensics instead of feed data.
+      I was hunting something unrelated on Censys, pivoted on a different lead entirely, and by accident landed on a PureMiner panel sitting in an open directory on a host that was also running AsyncRAT. That host turned up in the feeds. But when I pulled its details, I noticed something odd: the RDP certificate and SMB server fingerprints looked like they had been copied byte for byte to another host on a different provider. Then a third node turned up in the dropper configuration. By the time I was done, I had three nodes, all connected by infrastructure forensics rather than by anything the feeds handed me.
     </p>
 
     <p>
-      The point is that feed coverage is not complete, and machines leave fingerprints when you look at the right data. An RDP certificate is not a mystery it is a copy paste operation. An SMB server GUID is a cloned drive. A machine name is a template image. These are the tells that real operators do not think about.
+      The point is that feed coverage is not complete, and machines leave fingerprints when you look at the right data. An RDP certificate is not a mystery, it is a copy paste operation. An SMB server GUID is a cloned drive. A machine name is a template image. These are the tells that real operators do not think about.
     </p>
 
     <h2>The nodes</h2>
 
     <h3>172.94.18[.]103 (M247 Europe, Frankfurt DE)</h3>
     <p>
-      <strong>Status:</strong> Known. ThreatFox entry since October 2025 (AsyncRAT). VT 15/91 detections.
+      <strong>Status:</strong> Known in both feeds. ThreatFox entry since October 2025 (AsyncRAT), and 50 pulses on OTX. VT 15/91 detections. This is the operation's known anchor node.
     </p>
     <p>
       This host is running PureMiner on port 80 with an open directory. It also listens for AsyncRAT C2 on ports 73, 75, 76, 79, and 80. The exposed directory contains server.pfx (the RDP host private key) and usersettings.json (the mining configuration, 107 KB, showing pool addresses, profitability algorithm weights, and the payout wallet). The DDNS fronts <code>proxey[.]publicvm[.]com</code> and <code>panel[.]freeddns[.]org</code> both resolve to this IP.
@@ -119,12 +119,12 @@
 
     <h3>46.105.149[.]77 (OVH SAS, Gravelines FR)</h3>
     <p>
-      <strong>Status:</strong> Novel. ThreatFox no result. VT 2/91 (noise).
+      <strong>Status:</strong> The feed gap case. ThreatFox returned no result, but OTX already had it in 33 pulses. VT 2/91 (noise). So this node was invisible to one feed while well documented in another, which is exactly the single feed blind spot worth paying attention to.
     </p>
     <p>
       This host is a byte identical clone of 172.94.18[.]103. Proof:
     </p>
-    <ul class="key-list">
+    <ul class="key list">
       <li>RDP host certificate: identical SHA 256 <code>0254cdb43059463dc3c6c752a629ce7afe79b83e6a3f24bfa799d5540585a633</code></li>
       <li>Certificate serial: 42080847443163672693097279193958762668 (same)</li>
       <li>SMB server GUID: <code>…48bdf0df8a67e040aab8fdd21d197710</code> (same)</li>
@@ -137,7 +137,7 @@
 
     <h3>128.1.79[.]99 (UCLOUD Information Technology, Bangkok TH)</h3>
     <p>
-      <strong>Status:</strong> Novel. ThreatFox no result. VT 1/91 (noise).
+      <strong>Status:</strong> The genuinely new node. Absent from both ThreatFox (no result) and OTX (no prior pulses until mine). VT 1/91 (noise). This is the one node in the cluster that neither feed had seen.
     </p>
     <p>
       This host is tied to the cluster via the PowerShell dropper <code>enyhxk.ps1</code> (SHA 256 <code>3b19ba5c3212bde4570940d81aa5b34ff1d9138961556aedf498dda616dbced5</code>), which is a trojan.boxter loader. The VirusTotal report for this dropper lists its <code>contacted_ips</code> as 128.1.79[.]99, 172.94.18[.]103, and 8.8.8[.]8. The Bangkok node also stages the injection machinery: folders <code>/pp/</code> and <code>/ss/</code> contain AutoHotkey process injection scripts and encoded PE payloads.
@@ -145,10 +145,10 @@
 
     <h3>165.154.184[.]75 (UCLOUD Information Technology, Bangkok TH)</h3>
     <p>
-      <strong>Status:</strong> Novel but flagged. ThreatFox no result. VT 8/91 (malicious consensus).
+      <strong>Status:</strong> Flagged but feed thin. ThreatFox no result. VT 8/91 (malicious consensus).
     </p>
     <p>
-      This host is the plugin and payload distribution server. The miner configurations on 46.105.149[.]77 and 128.1.79[.]99 reference <code>hxxp://165.154.184[.]75/New2026/plugin{1,2,3}.bin</code>. VirusTotal already flagged this host as malicious, but the threat feeds had not indexed it. That is the novelty: known bad infrastructure that was not yet in the feeds.
+      This host is the plugin and payload distribution server. The miner configurations on 46.105.149[.]77 and 128.1.79[.]99 reference <code>hxxp://165.154.184[.]75/New2026/plugin{1,2,3}.bin</code>. VirusTotal already flagged this host as malicious, but ThreatFox had not indexed it. Known bad to one source, missing from another, which is the same coverage gap pattern the rest of the cluster shows.
     </p>
 
     <h2>The delivery machinery and process injection</h2>
@@ -157,10 +157,10 @@
       The Bangkok node stages a sophisticated delivery chain using process injection and in memory PE loading. Two folders, <code>/pp/</code> and <code>/ss/</code>, each contain three components:
     </p>
 
-    <ul class="key-list">
-      <li><code>real.exe</code> / <code>s.exe</code>—stock AutoHotkey v1.1.37.02 interpreter (not malicious on its own)</li>
-      <li><code>real.ahk</code> / <code>s.ahk</code>—process injection scripts (the malicious component)</li>
-      <li><code>a2026.png</code> / <code>s.png</code>—encoded PE binaries in CSV format</li>
+    <ul class="key list">
+      <li><code>real.exe</code> / <code>s.exe</code>, stock AutoHotkey v1.1.37.02 interpreter (not malicious on its own)</li>
+      <li><code>real.ahk</code> / <code>s.ahk</code>, process injection scripts (the malicious component)</li>
+      <li><code>a2026.png</code> / <code>s.png</code>, encoded PE binaries in CSV format</li>
     </ul>
 
     <p>
@@ -174,7 +174,7 @@
     </p>
 
     <p><strong>a2026_decoded.exe</strong> (decoded from a2026.png, multiply by 2)</p>
-    <ul class="key-list">
+    <ul class="key list">
       <li><strong>SHA 256:</strong> <code>4dd0748c0296953a216bbf962c2ebdf228463536ad6974dc38cb37425db6e422</code></li>
       <li><strong>Threat:</strong> trojan.asyncrat/msil</li>
       <li><strong>VirusTotal:</strong> 58/76 vendors flagged as malicious</li>
@@ -184,8 +184,8 @@
       This is a recognized AsyncRAT variant. AsyncRAT is a known remote access trojan sold on underground markets. The presence of a known RAT alongside the crypto stealer (below) suggests a two stage delivery: first profile the victim, then deploy the RAT for manual control once high value targets are identified.
     </p>
 
-    <p><strong>s_decoded.exe</strong> (decoded from s.png, multiply by 4)—<strong>AsyncRAT Build Configured as a Wallet Stealer &amp; Target Profiler</strong></p>
-    <ul class="key-list">
+    <p><strong>s_decoded.exe</strong> (decoded from s.png, multiply by 4), <strong>AsyncRAT Build Configured as a Wallet Stealer &amp; Target Profiler</strong></p>
+    <ul class="key list">
       <li><strong>SHA 256:</strong> <code>8be38944888bfccf63a61956707a9fc53654e2b70e5adfec860235a9afaaad24</code></li>
       <li><strong>Threat:</strong> AsyncRAT based build, wallet stealer configuration</li>
       <li><strong>VirusTotal:</strong> Not detected by static scan, but sandbox detonation confirms behavior</li>
@@ -193,7 +193,11 @@
     </ul>
 
     <p>
-      I first thought this was a wholly new standalone stealer. Detonating it in a sandbox corrected that. The backbone is AsyncRAT, a known family the sample creates the signature AsyncRAT mutex <code>AsyncMutex_6SI8OkBSS</code>, which is a known default and confirms the family but does not tie it uniquely to this operator. What is distinctive here is the configuration: this build is set up to hunt cryptocurrency wallets, and it calls a fresh C2 I had not seen before.
+      This payload was not sitting in a feed waiting to be found. I pulled the encoded staging file <code>s.png</code> from the open directory on 128.1.79[.]99, applied the cipher transform the AutoHotkey script uses (the CSV float values, multiplied by 4) to reconstruct the original PE, and generated the hash above from the decoded binary. It was absent from VirusTotal at that point, and I submitted both the sample and the indicators afterward. The decode is what surfaced it.
+    </p>
+
+    <p>
+      I first thought this was a wholly new standalone stealer. Detonating it in a sandbox corrected that. The backbone is AsyncRAT, a known family, the sample creates the signature AsyncRAT mutex <code>AsyncMutex_6SI8OkBSS</code>, which is a known default and confirms the family but does not tie it uniquely to this operator. What is distinctive here is the configuration: this build is set up to hunt cryptocurrency wallets, and it calls a fresh C2 I had not seen before.
     </p>
 
     <p>
@@ -259,14 +263,14 @@ host.services.cert.fingerprint_sha256="0254cdb43059463dc3c6c752a629ce7afe79b83e6
 
     <h2>Indicators</h2>
 
-    <div class="ioc-block">
+    <div class="ioc block">
       <h4>C2 Nodes</h4>
-      <pre><code>172.94.18[.]103       M247 DE         PureMiner + AsyncRAT C2     KNOWN (ThreatFox Oct 2025)
-46.105.149[.]77       OVH FR          PureMiner (clone)             NOVEL (ThreatFox no_result)
-128.1.79[.]99         UCLOUD Bangkok  PureMiner + injection staging  NOVEL (ThreatFox no_result)</code></pre>
+      <pre><code>172.94.18[.]103       M247 DE         PureMiner + AsyncRAT C2     KNOWN (ThreatFox + OTX)
+46.105.149[.]77       OVH FR          PureMiner (clone)             OTX-known, ThreatFox-absent
+128.1.79[.]99         UCLOUD Bangkok  PureMiner + injection staging  NEW (absent from both feeds)</code></pre>
     </div>
 
-    <div class="ioc-block">
+    <div class="ioc block">
       <h4>Payload Distribution, DDNS &amp; Sample C2</h4>
       <pre><code>165.154.184[.]75                  UCLOUD Bangkok  plugin/payload host        (VT 8/91)
 34.171.51[.]66:190                Google Cloud    s_decoded.exe live C2      (from detonation)
@@ -274,7 +278,7 @@ proxey[.]publicvm[.]com → 172.94.18[.]103      operator DDNS front
 panel[.]freeddns[.]org  → 172.94.18[.]103      operator DDNS (host reported)</code></pre>
     </div>
 
-    <div class="ioc-block">
+    <div class="ioc block">
       <h4>Malware Samples</h4>
       <pre><code>3b19ba5c3212bde4570940d81aa5b34ff1d9138961556aedf498dda616dbced5
   enyhxk.ps1 — PowerShell boxter loader
@@ -309,30 +313,35 @@ effdea83c6b7a1dc2ce9e9d40e91dfd59bed9fcbd580903423648b7ca97d9696
     <h2>The honest wrap up</h2>
 
     <p>
-      This started as an accident (I was looking for something else entirely) and turned into a complete infrastructure map. The three node cluster is real, the cloning is real, the delivery chain is real, and the decoded payloads are in my hands. One node was known, two were not. One payload is documented (AsyncRAT), one is new to the feeds. The feeds had coverage gaps, and this is exactly the kind of thing that slips through when you only look at top level IOCs instead of the fingerprints of the machines underneath.
+      This started as an accident (I was looking for something else entirely) and turned into a complete infrastructure map. The three node cluster is real, the cloning is real, the delivery chain is real, and the decoded payloads are in my hands. The feed coverage told its own story: one node known in both ThreatFox and OTX, one missing from ThreatFox but already in 33 OTX pulses, and one absent from both. One payload is documented (AsyncRAT), one was new to the feeds. The patchwork is the point. The same node can be known in one feed and invisible in another, and the gaps run in both directions, which is exactly the kind of thing that slips through when you trust a single source of top level IOCs instead of reading the fingerprints of the machines underneath.
     </p>
 
     <p>
       The infrastructure is real, the machines are real, and the machines will behave the same way when the operator spins up the next clone. That is what the tracking signature is for.
     </p>
-    <div class="callout-note">
+
+    <p>
+      If you are in the threat intel space and you have the bandwidth to take this further, pull the payout wallet from usersettings.json and track where the operator is mining to, or keep an eye on AS135377 for new clones, I am interested. This is the kind of thing that improves when multiple eyes are on it.
+    </p>
+
+    <div class="callout note">
       <strong>Sources and methodology.</strong> Infrastructure clustering and certificate analysis via Censys Platform. Malware sample analysis via VirusTotal and local decompilation. Process injection technique cross referenced against known patterns. The AutoHotkey process hollowing pattern is a documented technique, repurposed here in a cryptojacking context.
     </div>
 
-    <div class="newsletter-cta inline">
-      <h2 class="newsletter-cta-heading">Liked this?</h2>
-      <p class="newsletter-cta-sub">
+    <div class="newsletter cta inline">
+      <h2 class="newsletter cta heading">Liked this?</h2>
+      <p class="newsletter cta sub">
         I write one of these a month. Drop your email below to get new posts
         and research in your inbox. No spam.
       </p>
       <form
-        action="https://buttondown.com/api/emails/embed-subscribe/ghostinthebit"
+        action="https://buttondown.com/api/emails/embed subscribe/ghostinthebit"
         method="post"
-        class="embeddable-buttondown-form"
+        class="embeddable buttondown form"
         target="popupwindow"
       >
-        <label for="bd-email">Enter your email</label>
-        <input type="email" name="email" id="bd-email" placeholder="your@email.com" required />
+        <label for="bd email">Enter your email</label>
+        <input type="email" name="email" id="bd email" placeholder="your@email.com" required />
         <input type="submit" value="Subscribe" />
         <p>
           <a href="https://buttondown.com/refer/ghostinthebit" target="_blank" rel="noopener">
@@ -343,13 +352,13 @@ effdea83c6b7a1dc2ce9e9d40e91dfd59bed9fcbd580903423648b7ca97d9696
     </div>
   </main>
 
-  <footer class="site-footer">
-    <p><span id="footer-year"></span> · Ghost in the Bit</p>
+  <footer class="site footer">
+    <p><span id="footer year"></span> · Ghost in the Bit</p>
   </footer>
   <script type="module">
-    import { renderSiteNav } from "/platform/lib/site-nav.js";
-    renderSiteNav(document.getElementById("site-nav-inline"), "blog");
-    document.getElementById("footer-year").textContent = new Date().getFullYear();
+    import { renderSiteNav } from "/platform/lib/site nav.js";
+    renderSiteNav(document.getElementById("site nav inline"), "blog");
+    document.getElementById("footer year").textContent = new Date().getFullYear();
   </script>
 </body>
 </html>
