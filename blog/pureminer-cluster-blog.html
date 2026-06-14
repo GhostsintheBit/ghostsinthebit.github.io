@@ -1,17 +1,17 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf 8" />
-  <meta name="viewport" content="width=device width, initial scale=1.0" />
-  <title>Cloned VM Image, Three Cryptojacking Panels, One Delivery Chain, Ghost in the Bit</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cloned VM Image, Three Cryptojacking Panels, One Delivery Chain — Ghost in the Bit</title>
   <meta name="description" content="A three node PureMiner cryptojacking cluster connected by cloned VM images and process injection staging. Mapped the infrastructure, decoded the payloads, and found an AsyncRAT build configured to profile victims for cryptocurrency wallets." />
-  <link rel="icon" type="image/x icon" href="/images/favicons/favicon.ico" />
-  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicons/favicon 16x16.png" />
-  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicons/favicon 32x32.png" />
-  <link rel="icon" type="image/png" sizes="192x192" href="/images/favicons/favicon 192x192.png" />
-  <link rel="apple touch icon" sizes="180x180" href="/images/favicons/apple touch icon.png" />
+  <link rel="icon" type="image/x-icon" href="/images/favicons/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicons/favicon-16x16.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicons/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/images/favicons/favicon-192x192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicons/apple-touch-icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
-  <meta name="theme color" content="#0a0a0a" />
+  <meta name="theme-color" content="#0a0a0a" />
   <link rel="stylesheet" href="/platform/styles/core.css" />
   <style>
     /* Report-specific additions, built from core.css tokens so it stays native */
@@ -65,23 +65,23 @@
   </style>
 </head>
 <body>
-  <header class="site header">
-    <a href="/" class="brand"><span class="brand mark">◯</span><span class="brand name">Ghost in the Bit</span></a>
-    <nav class="site nav inline" id="site nav inline"></nav>
+  <header class="site-header">
+    <a href="/" class="brand"><span class="brand-mark">◯</span><span class="brand-name">Ghost in the Bit</span></a>
+    <nav class="site-nav-inline" id="site-nav-inline"></nav>
   </header>
 
   <main class="article">
-    <header class="article header">
-      <h1 class="article title">Cloned VM Image, Three Cryptojacking Panels, One Delivery Chain</h1>
-      <div class="article meta">
-        <span class="category pill">research</span>
+    <header class="article-header">
+      <h1 class="article-title">Cloned VM Image, Three Cryptojacking Panels, One Delivery Chain</h1>
+      <div class="article-meta">
+        <span class="category-pill">research</span>
         <time datetime="2026 06 12">June 12, 2026</time>
         <span>Threat hunting</span>
         <span>22 min read</span>
       </div>
     </header>
 
-    <div class="callout note">
+    <div class="callout-note">
       <strong>One note before we start.</strong> I am not a malware reverse engineer by trade. What I am decent at is the part that comes before the deep reversing: noticing something that does not add up, pulling the thread methodically, and refusing to overclaim. I would rather be the person who says I am not sure, let me verify, than the one who confidently ships something wrong.
     </div>
 
@@ -90,7 +90,7 @@
     </p>
 
     <h2>The short version</h2>
-    <ul class="key list">
+    <ul class="key-list">
       <li>Three IP addresses running PureMiner cryptojacking panels, all in open directories. Two are <strong>byte identical clones</strong> of the same VM image (identical RDP certs, SMB GUIDs, machine names). The third is tied via a shared dropper.</li>
       <li>Feed coverage across the three nodes is a patchwork. Checking against two separate feeds (ThreatFox and OTX), one node was known in both, one was missing from ThreatFox but already sat in 33 OTX pulses, and one was <strong>absent from both</strong>. That last one is the genuinely new node.</li>
       <li>The Bangkok node stages <strong>process injection delivery</strong> using AutoHotkey scripts that decode and hollow inject PE binaries into suspended AppLaunch.exe processes.</li>
@@ -124,7 +124,7 @@
     <p>
       This host is a byte identical clone of 172.94.18[.]103. Proof:
     </p>
-    <ul class="key list">
+    <ul class="key-list">
       <li>RDP host certificate: identical SHA 256 <code>0254cdb43059463dc3c6c752a629ce7afe79b83e6a3f24bfa799d5540585a633</code></li>
       <li>Certificate serial: 42080847443163672693097279193958762668 (same)</li>
       <li>SMB server GUID: <code>…48bdf0df8a67e040aab8fdd21d197710</code> (same)</li>
@@ -157,7 +157,7 @@
       The Bangkok node stages a sophisticated delivery chain using process injection and in memory PE loading. Two folders, <code>/pp/</code> and <code>/ss/</code>, each contain three components:
     </p>
 
-    <ul class="key list">
+    <ul class="key-list">
       <li><code>real.exe</code> / <code>s.exe</code>, stock AutoHotkey v1.1.37.02 interpreter (not malicious on its own)</li>
       <li><code>real.ahk</code> / <code>s.ahk</code>, process injection scripts (the malicious component)</li>
       <li><code>a2026.png</code> / <code>s.png</code>, encoded PE binaries in CSV format</li>
@@ -174,7 +174,7 @@
     </p>
 
     <p><strong>a2026_decoded.exe</strong> (decoded from a2026.png, multiply by 2)</p>
-    <ul class="key list">
+    <ul class="key-list">
       <li><strong>SHA 256:</strong> <code>4dd0748c0296953a216bbf962c2ebdf228463536ad6974dc38cb37425db6e422</code></li>
       <li><strong>Threat:</strong> trojan.asyncrat/msil</li>
       <li><strong>VirusTotal:</strong> 58/76 vendors flagged as malicious</li>
@@ -185,7 +185,7 @@
     </p>
 
     <p><strong>s_decoded.exe</strong> (decoded from s.png, multiply by 4), <strong>AsyncRAT Build Configured as a Wallet Stealer &amp; Target Profiler</strong></p>
-    <ul class="key list">
+    <ul class="key-list">
       <li><strong>SHA 256:</strong> <code>8be38944888bfccf63a61956707a9fc53654e2b70e5adfec860235a9afaaad24</code></li>
       <li><strong>Threat:</strong> AsyncRAT based build, wallet stealer configuration</li>
       <li><strong>VirusTotal:</strong> Not detected by static scan, but sandbox detonation confirms behavior</li>
@@ -263,14 +263,14 @@ host.services.cert.fingerprint_sha256="0254cdb43059463dc3c6c752a629ce7afe79b83e6
 
     <h2>Indicators</h2>
 
-    <div class="ioc block">
+    <div class="ioc-block">
       <h4>C2 Nodes</h4>
       <pre><code>172.94.18[.]103       M247 DE         PureMiner + AsyncRAT C2     KNOWN (ThreatFox + OTX)
 46.105.149[.]77       OVH FR          PureMiner (clone)             OTX-known, ThreatFox-absent
 128.1.79[.]99         UCLOUD Bangkok  PureMiner + injection staging  NEW (absent from both feeds)</code></pre>
     </div>
 
-    <div class="ioc block">
+    <div class="ioc-block">
       <h4>Payload Distribution, DDNS &amp; Sample C2</h4>
       <pre><code>165.154.184[.]75                  UCLOUD Bangkok  plugin/payload host        (VT 8/91)
 34.171.51[.]66:190                Google Cloud    s_decoded.exe live C2      (from detonation)
@@ -278,7 +278,7 @@ proxey[.]publicvm[.]com → 172.94.18[.]103      operator DDNS front
 panel[.]freeddns[.]org  → 172.94.18[.]103      operator DDNS (host reported)</code></pre>
     </div>
 
-    <div class="ioc block">
+    <div class="ioc-block">
       <h4>Malware Samples</h4>
       <pre><code>3b19ba5c3212bde4570940d81aa5b34ff1d9138961556aedf498dda616dbced5
   enyhxk.ps1 — PowerShell boxter loader
@@ -320,24 +320,24 @@ effdea83c6b7a1dc2ce9e9d40e91dfd59bed9fcbd580903423648b7ca97d9696
       The infrastructure is real, the machines are real, and the machines will behave the same way when the operator spins up the next clone. That is what the tracking signature is for.
     </p>
 
-    <div class="callout note">
+    <div class="callout-note">
       <strong>Sources and methodology.</strong> Infrastructure clustering and certificate analysis via Censys Platform. Malware sample analysis via VirusTotal and local decompilation. Process injection technique cross referenced against known patterns. The AutoHotkey process hollowing pattern is a documented technique, repurposed here in a cryptojacking context.
     </div>
 
-    <div class="newsletter cta inline">
-      <h2 class="newsletter cta heading">Liked this?</h2>
-      <p class="newsletter cta sub">
+    <div class="newsletter-cta inline">
+      <h2 class="newsletter-cta-heading">Liked this?</h2>
+      <p class="newsletter-cta-sub">
         I write one of these a month. Drop your email below to get new posts
         and research in your inbox. No spam.
       </p>
       <form
         action="https://buttondown.com/api/emails/embed subscribe/ghostinthebit"
         method="post"
-        class="embeddable buttondown form"
+        class="embeddable-buttondown-form"
         target="popupwindow"
       >
-        <label for="bd email">Enter your email</label>
-        <input type="email" name="email" id="bd email" placeholder="your@email.com" required />
+        <label for="bd-email">Enter your email</label>
+        <input type="email" name="email" id="bd-email" placeholder="your@email.com" required />
         <input type="submit" value="Subscribe" />
         <p>
           <a href="https://buttondown.com/refer/ghostinthebit" target="_blank" rel="noopener">
@@ -348,13 +348,13 @@ effdea83c6b7a1dc2ce9e9d40e91dfd59bed9fcbd580903423648b7ca97d9696
     </div>
   </main>
 
-  <footer class="site footer">
-    <p><span id="footer year"></span> · Ghost in the Bit</p>
+  <footer class="site-footer">
+    <p><span id="footer-year"></span> · Ghost in the Bit</p>
   </footer>
   <script type="module">
-    import { renderSiteNav } from "/platform/lib/site nav.js";
-    renderSiteNav(document.getElementById("site nav inline"), "blog");
-    document.getElementById("footer year").textContent = new Date().getFullYear();
+    import { renderSiteNav } from "/platform/lib/site-nav.js";
+    renderSiteNav(document.getElementById("site-nav-inline"), "blog");
+    document.getElementById("footer-year").textContent = new Date().getFullYear();
   </script>
 </body>
 </html>
