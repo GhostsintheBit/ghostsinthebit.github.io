@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>A Second Opinion on the Server That Said "pls input someting" — Ghost in the Bit</title>
+  <meta name="description" content="I rebuilt a finished cryptojacking investigation inside Silent Push to test whether it survived a different platform. The fleet held and came through fuller, the scan history added a timeline and a lapsed 2018 registration, and the discipline that kept it honest did not change." />
+  <link rel="icon" type="image/x-icon" href="/images/favicons/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicons/favicon-16x16.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicons/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/images/favicons/favicon-192x192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicons/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <link rel="stylesheet" href="/platform/styles/core.css" />
+  <style>
+    /* Report-specific additions, built from core.css tokens so it stays native */
+    .article figure { margin: var(--space-6) 0; }
+    .article figure img {
+      width: 100%;
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-3);
+      background: var(--bg-2);
+    }
+    .article figcaption {
+      margin-top: var(--space-2);
+      font-size: 0.82rem;
+      color: var(--text-3);
+      text-align: center;
+    }
+    .key-list { list-style: none; padding: 0; margin: var(--space-4) 0; }
+    .key-list li {
+      position: relative;
+      padding: 10px 0 10px 22px;
+      border-bottom: 1px solid var(--border-soft);
+      color: var(--text-1);
+    }
+    .key-list li::before {
+      content: "";
+      position: absolute; left: 0; top: 17px;
+      width: 8px; height: 8px;
+      background: var(--accent);
+      transform: rotate(45deg);
+    }
+    .callout-note {
+      background: var(--bg-2);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 var(--radius-2) var(--radius-2) 0;
+      padding: var(--space-3) var(--space-5);
+      margin: var(--space-5) 0;
+      color: var(--text-1);
+      font-size: 0.95rem;
+    }
+    .callout-note strong { color: var(--text-0); }
+    .ioc-block {
+      background: var(--code-bg);
+      border: 1px solid var(--code-border);
+      border-radius: var(--radius-3);
+      padding: var(--space-4) var(--space-5);
+      margin: var(--space-5) 0;
+      font-size: 0.85rem;
+    }
+    .ioc-block h4 { margin: 0 0 var(--space-2); color: var(--text-1); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    .ioc-block + .ioc-block { margin-top: calc(var(--space-5) * -0.4); }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <a href="/" class="brand"><span class="brand-mark">◯</span><span class="brand-name">Ghost in the Bit</span></a>
+    <nav class="site-nav-inline" id="site-nav-inline"></nav>
+  </header>
+
+  <main class="article">
+    <header class="article-header">
+      <h1 class="article-title">A Second Opinion on the Server That Said "pls input someting"</h1>
+      <div class="article-meta">
+        <span class="category-pill">threat hunting</span>
+        <span class="category-pill">validation</span>
+        <time datetime="2026-06-19">June 21, 2026</time>
+        <span>Threat hunting</span>
+        <span>15 min read</span>
+      </div>
+    </header>
+
+    <div class="callout-note">
+      <strong>The findings I trust most are the ones two independent tools land on without ever comparing notes.</strong> I had already published the <a href="/blog/pls-input-someting-blog.html">"pls input someting" investigation</a>, a multi coin cryptojacking takeover running on a Beijing cloud, traced through the Censys Platform from a single careless open directory to a 27 server fleet. The case felt solid, and I believed it. However, a result that a second scanner reaches on its own, from its own data, is one I can stand behind a good deal harder, and the only way to earn that was to take the whole thing somewhere else and try to break it.
+    </div>
+
+    <p>
+      So I rebuilt it from scratch in Silent Push, a platform I had heard of but never used for real work before. I wanted to know three things. Did the fleet survive a different scanner with a different view of the same internet. Did the operator infrastructure look the same through a different lens. And what would a platform with its own scanners and its own history add to a case I already thought was finished. The honest answer to all three is more interesting than a clean win, because the case went deeper, one signature behaved differently here and sent me looking for a better one, and the platform handed me a piece of history the public record no longer shows.
+    </p>
+
+    <h2>The short version</h2>
+    <ul class="key-list">
+      <li>The fleet held, and it came through fuller. The 27 servers from the original investigation were all here, and Silent Push's scan data carried the live cluster more completely, 38 distinct hosts, the same misspelled login box on every one.</li>
+      <li>The signature that cracked the case the first time, the misspelled realm <strong>pls input someting</strong>, is sitting in Silent Push's data on every host, returned in every record. The platform indexes a different set of fields for searching, so I rebuilt the fleet on those, and it came together cleanly.</li>
+      <li>Every reusable hash I tried collided with the entire internet. The fuzzy hash of the login page matched more than 58 million hosts, and the header fingerprint nearly 1.8 million. The lesson from the first investigation repeated itself almost word for word, and the fix was the same. Throw away the big number, keep the rare one.</li>
+      <li>The rare one was the server build. An old <code>nginx/1.16.1</code> answering 401 on port 80 inside the operator's network rebuilds the whole fleet cleanly, with the typo riding along on every row to confirm it.</li>
+      <li>The platform's depth added two things to the picture. Its passive history showed the fleet's core has been live since June 2025, half a year before the buildout I first caught. And its retained registration records surfaced a lapsed 2018 history on one operator domain that the live public record no longer shows.</li>
+    </ul>
+
+    <h2>A different set of eyes</h2>
+    <p>
+      Silent Push runs its own scan and Domain Name System (DNS) collection, and you query it with a small language called SPQL. The grammar is straight forward enough. You write <code>field operator value</code>, separate the clauses with spaces, and join them with <code>AND</code>. There is no <code>OR</code> keyword, though a bracketed list on one field acts like one. You aim each query at a repository with <code>datasource =</code>, and for the web side the ones that mattered to me were <code>webscan</code> for the host responses, <code>services</code> for the banner and key data, <code>opendirectory</code> for raw listings, and <code>whois</code> for registration.
+    </p>
+    <p>
+      One thing to know before you start, because it cost me a few minutes of confusion. The hashes do not port. Silent Push computes its own fingerprints its own way, so the Censys hash I carried in from the first investigation matches nothing here. For anything hash shaped, the host fingerprint, the body hash, the Secure Shell (SSH) key fingerprint, you open a known host first, read the platform's own value off its record, and pivot on that. Paste a foreign hash and you will get a clean and very convincing zero.
+    </p>
+
+    <h2>The anchor, and what each scanner captured</h2>
+    <p>
+      I started where the whole case started, the open directory at <code>101.126.33[.]186</code>, the build bench that had been serving the toolkit. In Censys that host answered on port 9999 with a raw listing, which is the single thread the entire investigation hangs from. I asked Silent Push for the same thing.
+    </p>
+
+    <pre><code>ip = 101.126.33.186 AND datasource = opendirectory</code></pre>
+
+    <p>
+      Nothing. Zero results, and the reason is ordinary. Scanners sweep enormous stretches of the internet and sample ports as they go, so any two platforms will have caught a given host on different services at different moments. Silent Push's record of this machine had captured its SSH service rather than the directory port, which looks at first like a miss and turns out to be a gift, because the SSH side is exactly what I needed next.
+    </p>
+
+    <p>What the platform did have on the anchor was its SSH side.</p>
+
+    <pre><code>ip = 101.126.33.186 AND datasource = services</code></pre>
+
+    <p>Four records, all the same OpenSSH banner, and with them the host's RSA key fingerprint in Silent Push's own format.</p>
+
+    <pre><code>fingerprints.RSA = "SHA256:xzBUOdt2tM/wmFtyes+jtRZq6xE/CQMBoXH/cULs0i8"</code></pre>
+
+    <p>
+      In the first investigation an SSH key is where I nearly fooled myself, betting a shared host key would tie a fleet together and instead pulling back 13,736 cloned cloud images. So I ran this one out of habit, half expecting the same trap. It pivoted to exactly two records, both the anchor itself. This key belongs to one box and one box only. The payload origin I check later carries its own unique key as well. On this platform, for these hosts, the SSH key tracks an individual machine rather than linking the estate, which is the opposite failure mode from the one that nearly caught me before, and a useful reminder that the same field can be a trap on one host and a clean tracking signal on another. You learn which by testing it, never by assuming.
+    </p>
+
+    <h2>The fleet, and finding the right signature</h2>
+    <p>
+      Now the heart of it. In Censys I isolated the fleet on one detail, the realm string in the <code>WWW-Authenticate</code> header.
+    </p>
+
+    <pre><code>WWW-Authenticate: Basic realm="pls input someting"</code></pre>
+
+    <p>
+      An nginx basic auth prompt has no default text. The operator has to supply that string, so a realm is always a deliberate choice, and this one is a careless choice made once and never corrected, <code>pls input someting</code>, misspelled and worn byte for byte by every server the operator built. The first thing I confirmed in Silent Push is that the platform captures it too. Open any fleet host and it is right there in the record.
+    </p>
+
+    <pre><code>header.www-authenticate = Basic realm="pls input someting"</code></pre>
+
+    <p>
+      Silent Push returns a great deal in every record and indexes a specific set of fields for searching, and those two sets are not identical. The realm is among the values it returns and displays. When I aimed a query straight at it, by exact value and by wildcard both, the index answered the same way each time, because the realm sits outside the searchable set.
+    </p>
+
+    <pre><code>Please enter a valid query.</code></pre>
+
+    <p>
+      Their published field reference spells out which header fields are searchable, <code>server</code>, <code>content-type</code>, <code>content-length</code>, <code>connection</code>, <code>cache-control</code>, <code>etag</code>, <code>refresh</code>, and <code>x-powered-by</code>, and the realm is returned rather than among them. That is not a dead end, it is a signpost. It told me the realm would be my confirmation rather than my selector, and pointed me toward the indexed field that was rare enough to stand in for it. So I went looking for another road to the same 38 hosts.
+    </p>
+
+    <p>
+      The obvious road is the page itself, and it is a trap. Every fleet host answers with the same tiny <code>401</code>, and the platform offers several hashes of that reply. I read the fuzzy hash off a known host and searched it.
+    </p>
+
+    <pre><code>html_body_ssdeep = "3:qVZxQXbZ6iF4:qzxO965" AND datasource = webscan
+→ 58,528,679</code></pre>
+
+    <p>Fifty eight million hosts. Constraining that to the operator's own network barely helped.</p>
+
+    <pre><code>html_body_ssdeep = "3:qVZxQXbZ6iF4:qzxO965" AND geoip.asn = 137718 AND datasource = webscan
+→ 12,367</code></pre>
+
+    <p>
+      The header fingerprint did no better, and it is worth being precise about why. Silent Push computes a value it calls the HHV, and its own field reference defines it as a hash based on the header keys, the set of header names a host returns rather than their values. The whole fleet shares one, so I had high hopes for it.
+    </p>
+
+    <pre><code>HHV = "0fa1cddc4cff3d1e2bcc952a40" AND datasource = webscan
+→ 1,789,640
+
+HHV = "0fa1cddc4cff3d1e2bcc952a40" AND geoip.asn = 137718 AND datasource = webscan
+→ 972</code></pre>
+
+    <p>
+      Almost two million worldwide, and the 972 left inside the operator's network were not the fleet. They were a grab bag of unrelated services that happen to return the same little 401, a Prometheus instance, admin panels on 8080 and 8081 and 8888, a spread of nginx versions from 1.14 to 1.29 and openresty besides. My fleet was uniform <code>nginx/1.16.1</code> on port 80. These were not it.
+    </p>
+
+    <p>
+      This is the exact lesson the first investigation drilled into me, arriving again in a new costume. Two different hashes, two different reasons neither one helps. The body hash matches because the login page is the stock nginx 401 that every nginx box on earth returns when it refuses a login. The header hash matches because every one of those boxes also presents the same set of header names. The misspelled realm is in there both times, as a header that exists and as a value on the page, and neither hash captures the one thing that was actually the operator's, the wording inside it. So the productive question became a simple one, which indexed field is rare enough, inside this network, to stand in for the typo.
+    </p>
+
+    <h2>The rebuild that held</h2>
+    <p>
+      The answer was hiding in the part of the response I had been treating as background. The fleet does not just share a 401. It shares an old server build, <code>nginx/1.16.1</code>, a 2019 release that is uncommon now, and the operator deployed it uniformly on port 80. A rare version, pinned to a port and a response code inside one autonomous system, is specific in a way the body never could be.
+    </p>
+
+    <pre><code>header.server = "nginx/1.16.1" AND response = 401 AND port = 80 AND geoip.asn = 137718 AND datasource = webscan</code></pre>
+
+    <p>
+      That is the rebuild. I pulled the full result and deduplicated it by host, and across nearly three hundred scan records reaching back to mid 2025 it collapsed to 38 distinct machines. Every single row carried <code>nginx/1.16.1</code>, port 80, a 401, and, returned in the record where I could read it, <code>Basic realm="pls input someting"</code>. Not one false positive in the entire set. The realm did the confirming, riding along on every row to vouch for the host the query had already caught.
+    </p>
+
+    <p>
+      Thirty eight distinct hosts. The 27 from the original investigation were all in there, and Silent Push's scan data carried the live cluster more completely at the moment I looked, which is what you expect when two independent scanners on their own sweep schedules each sample a cluster that has been growing since the summer. Both Beijing hosts came back, <code>180.184.54[.]173</code>, the one running the Uptime Kuma monitor pointed into the fleet, and its neighbor <code>180.184.54[.]253</code>. So did the two nodes I had named from the other side of the investigation, <code>115.190.140[.]175</code>, the payload origin written into line 10 of the malware, and <code>115.190.62[.]231</code>, the relay hardcoded in a configure script. The case did not just survive the move to a second platform. It came out the other side fuller and confirmed.
+    </p>
+
+    <p>
+      I want to be exact about one limit, because the restraint is the point. This four part query is operator exclusive in practice, proven by the realm appearing on all 38 hosts, not because an old nginx on port 80 could never belong to someone else. The realm typo is still the thing that says these machines are one operator's. It simply does the work from the passenger seat now, confirming rather than selecting.
+    </p>
+
+    <h2>What the history showed</h2>
+    <p>
+      The original investigation gave me the fleet as a snapshot, the cluster as it stood the week I found it. Silent Push keeps the scan history, and reading the dates turned that snapshot into a timeline.
+    </p>
+    <p>
+      Two hosts, <code>115.190.12[.]165</code> and <code>115.190.15[.]120</code>, have been answering with this exact fingerprint since late June 2025. The other 36 do not appear until November and December. So this was not a fleet that materialized the week I happened to find it. It had a two host core running the same misspelled realm for roughly five months, quietly, before the operator scaled it out into the cluster I eventually caught. On a platform built around the idea of indicators of future attack, the kind of behavioral signal you watch before it is weaponized rather than after, that is the whole argument in one timeline. The tell was sitting in the data, searchable through the server build, half a year ahead of the buildout. Nobody was watching for it yet. The point of a platform like this is to be the thing that was.
+    </p>
+
+    <h2>The domains, and what the platform's history added</h2>
+    <p>
+      In the published investigation I had to leave one thread honestly unfinished. The operator used two domains, <code>hd3p[.]com</code> and <code>http33[.]com</code>, and I could tie them together by how they were used but not by any clean record of shared ownership. Registration data is exactly where a passive DNS and WHOIS platform should earn its keep, so this is where I pushed.
+    </p>
+
+    <pre><code>domain = hd3p.com AND datasource = whois</code></pre>
+
+    <p>
+      <code>hd3p[.]com</code> came back created on 19 December 2012, registered through Alibaba Cloud Computing in Beijing. That matches what I already knew. Then <code>http33[.]com</code>.
+    </p>
+
+    <pre><code>domain = http33.com AND datasource = whois</code></pre>
+
+    <p>
+      Its current record is unremarkable, a 2023 registration sitting behind Cloudflare nameservers. The history is where the platform showed me something the live public record no longer does. Silent Push retained an earlier life for this domain, a registration from 28 December 2018, through Alibaba Cloud Computing in Beijing, on <code>reg.cn</code> nameservers, out of Jiangxi, that lapsed in 2019 before the domain was re-registered on Cloudflare years later. The nameserver hashes the platform keeps for tracking configuration changes tell the same story of three separate lives.
+    </p>
+
+    <pre><code>http33.com   2018  Alibaba / reg.cn     nshash 271868d2311a735f6b06e2856da57b83   (lapsed)
+http33.com   2023  Hostinger parking    nshash 445baadf45f7dc1cb60f1ff0163361d8
+http33.com   2023  Cloudflare           nshash be94bb8075b663eb9d1078c1754c5be6   (current)</code></pre>
+
+    <p>
+      Here is the discipline, because this is exactly the kind of result that wants to be more than it is. The retained 2018 history places <code>http33[.]com</code> in the same Alibaba Beijing milieu that <code>hd3p[.]com</code> has lived in since 2012. That is a real and genuinely useful detail, and the public record will not give it to you anymore. However, it is not proof the two domains share an owner. Alibaba is the dominant registrar across this entire region, a lapsed domain is routinely picked up by someone unrelated, and the three nameserver hashes do not match each other, let alone <code>hd3p[.]com</code>'s. So the link between the two domains stays exactly where I left it in the first writeup, established by use and unproven by registration. What changed is that I can now say so with the help of additional data. The platform did not hand me the link. It handed me a sharper, deeper documented reason that the link remains unproven, which in this work is its own kind of progress.
+    </p>
+
+    <h2>From queries to monitors</h2>
+    <p>
+      There is one more thing the rebuild made obvious, and it is the part that makes the whole exercise worth more than a reproduction. The same expressions save as monitored queries that alert the moment a new match appears. The fleet rebuild, the open directory mirror catch, a watch on the operator's domains, each one stops being a thing I check and becomes a thing that tells me. A query finds the fleet that exists today. A monitor is waiting for the thirty ninth host the night it comes online. That shift, from a query you run to a tripwire you set, is the difference I came to understand by doing this rebuild rather than reading about it.
+    </p>
+
+    <h2>What I am claiming, exactly</h2>
+    <p>The same restraint I held the first time applies here, so let me be exact.</p>
+    <p>
+      I have shown that the fleet reproduces on an independent platform, and that Silent Push's data added more to it than my first snapshot at the time of investigating, 38 hosts rather than the 27 I documented, every one carrying the misspelled realm. The fuller count is real coverage, not a looser query, because the realm confirms each host the rebuild catches.
+    </p>
+    <p>
+      I have shown that the operator's core has been live since at least June 2025, from the platform's retained scan history, and that the buildout into the full fleet followed months later.
+    </p>
+    <p>
+      I have shown a lapsed 2018 Alibaba registration on <code>http33[.]com</code> that the live public record no longer carries, and I am explicitly not calling it proof of shared ownership with <code>hd3p[.]com</code>. It is suggestive context that leaves the link where it was, unproven by registration.
+    </p>
+    <p>
+      I am noting two neutral facts about how the platform captured this particular case, that its scan of the anchor recorded the SSH service rather than the directory port, and that the realm sits among the returned fields rather than the indexed ones. Neither changed the outcome, and both shaped the path I took to it.
+    </p>
+    <p>
+      I am not restating the malware analysis here. The takeover chain, the backdoor, the relay backbone, all of that stands on the original investigation and its operator source files. This piece is about whether the infrastructure holds up under a second set of eyes, and it does.
+    </p>
+
+    <h2>What you can use</h2>
+    <p>
+      The queries below carry live values so they actually run on the platform. The host inventory at the end is defanged, so nothing in that block is clickable.
+    </p>
+
+    <p>Rebuild the fleet. Returns the operator's machines, clean, today.</p>
+
+    <pre><code>header.server = "nginx/1.16.1" AND response = 401 AND port = 80 AND geoip.asn = 137718 AND datasource = webscan</code></pre>
+
+    <p>If the autonomous system number ever behaves oddly, match the organization name instead.</p>
+
+    <pre><code>header.server = "nginx/1.16.1" AND response = 401 AND geoip.as_org ~= /Volcano/ AND datasource = webscan</code></pre>
+
+    <p>Do not pivot on the generic hashes. These are the traps, recorded so you do not repeat them.</p>
+
+    <pre><code>html_body_ssdeep = "3:qVZxQXbZ6iF4:qzxO965"          → 58,528,679   (the stock nginx 401 body, the whole internet)
+HHV = "0fa1cddc4cff3d1e2bcc952a40"                    → 1,789,640   (the stock 401 header set, not the realm value)
+HHV = "0fa1cddc4cff3d1e2bcc952a40" AND geoip.asn = 137718   → 972    (unrelated 401 services, not the fleet)</code></pre>
+
+    <p>Settle the domains as far as the data allows.</p>
+
+    <pre><code>domain = hd3p.com AND datasource = whois
+domain = http33.com AND datasource = whois</code></pre>
+
+    <p>Stand the signatures up as monitored queries so they alert on new matches rather than waiting to be rerun.</p>
+
+    <div class="ioc-block">
+      <h4>The fleet (38 hosts, defanged, all Volcano Engine / AS137718)</h4>
+      <pre><code>101.126.14[.]111    101.126.55[.]16     101.126.67[.]212    101.126.75[.]89
+101.126.78[.]183    101.126.84[.]193    101.126.88[.]177    101.126.89[.]153
+101.126.136[.]14
+115.190.12[.]165*   115.190.15[.]120*   115.190.55[.]231    115.190.59[.]140
+115.190.62[.]231    115.190.73[.]18     115.190.73[.]51     115.190.73[.]180
+115.190.73[.]240    115.190.74[.]110    115.190.74[.]144    115.190.74[.]200
+115.190.74[.]225    115.190.75[.]101    115.190.76[.]87     115.190.76[.]118
+115.190.76[.]254    115.190.77[.]205    115.190.79[.]142    115.190.115[.]35
+115.190.134[.]24    115.190.140[.]175   115.190.166[.]126   115.190.171[.]165
+115.190.174[.]228   115.190.174[.]229   115.190.174[.]230
+180.184.54[.]173    180.184.54[.]253</code></pre>
+    </div>
+
+    <p>
+      The two hosts marked with an asterisk, <code>115.190.12[.]165</code> and <code>115.190.15[.]120</code>, are the long lived core, present since late June 2025. <code>115.190.140[.]175</code> is the payload origin named in the malware, <code>115.190.62[.]231</code> is the hardcoded relay, and <code>180.184.54[.]173</code> runs the Uptime Kuma monitor on the operator's own domain.
+    </p>
+
+    <h2>Closing</h2>
+    <p>
+      I went into this expecting either a clean reproduction or an embarrassing one, and I got neither. The fleet did not just survive the move to a second platform, it came through fuller, and the history I could not see the first time showed a quiet core running for months before the operator scaled up. The signature that made the original hunt easy played a different role here, the realm typo riding along as confirmation while a rare server build did the selecting. The big internet wide hash numbers tried to fool me all over again, fifty eight million hosts on one of them, and the work was the same as it has always been, the patience to set the exciting number down and reach for the rare one instead.
+    </p>
+    <p>
+      That is the part I trust most about both versions of this investigation. The two platforms saw the case from different angles, and the discipline that held me honest did not change between them. A second platform deepened the picture, not because it was magic, but because I made it answer the same hard questions the first one did and refused to let a smaller, looser claim stand in for the one I could actually prove. Checking your own work on unfamiliar ground is uncomfortable, and it is the only way I know to find out whether what you believe is true or merely familiar. This case is truer to me now than it was when I published it, and the parts that are still unproven are unproven in writing, on purpose, which is exactly where I want them.
+    </p>
+
+    <div class="callout-note">
+      <strong>A note on method.</strong> The infrastructure rebuild, the host fingerprint and SSH key checks, the body hash comparisons, and the WHOIS and history work all ran inside the Silent Push platform. Where a value is a platform computed hash, I read it off a known host on the platform rather than importing a foreign hash, and I have noted that throughout. The network indicators in the inventory block are defanged. This piece validates and extends the infrastructure findings of the original <a href="/blog/pls-input-someting-blog.html">"pls input someting" investigation</a>, which carries the full malware analysis and operator source.
+    </div>
+
+    <div class="newsletter-cta inline">
+      <h2 class="newsletter-cta-heading">Liked this?</h2>
+      <p class="newsletter-cta-sub">
+        I write one of these a month. Drop your email below to get new posts
+        and research in your inbox. No spam.
+      </p>
+      <form
+        action="https://buttondown.com/api/emails/embed-subscribe/ghostinthebit"
+        method="post"
+        class="embeddable-buttondown-form"
+        target="popupwindow"
+      >
+        <label for="bd-email">Enter your email</label>
+        <input type="email" name="email" id="bd-email" placeholder="your@email.com" required />
+        <input type="submit" value="Subscribe" />
+        <p>
+          <a href="https://buttondown.com/refer/ghostinthebit" target="_blank" rel="noopener">
+            Powered by Buttondown.
+          </a>
+        </p>
+      </form>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p><span id="footer-year"></span> · Ghost in the Bit</p>
+  </footer>
+  <script type="module">
+    import { renderSiteNav } from "/platform/lib/site-nav.js";
+    renderSiteNav(document.getElementById("site-nav-inline"), "blog");
+    document.getElementById("footer-year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>
