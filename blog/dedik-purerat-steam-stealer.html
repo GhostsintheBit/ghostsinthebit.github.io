@@ -1,0 +1,952 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>One Open Directory, a Self Extracting Alarm Killer, and the Room Where the Stolen Goods Become Money — Ghost in the Bit</title>
+  <meta name="description" content="A hunt that began with one open directory on a rented Frankfurt box and ended two floors up, in the back office where stolen browser data gets turned into drained crypto wallets. A WinRAR self extractor that switches off every alarm in Windows, a .NET RAT on a certificate good until 2057, and then a pivot off the box into a cluster of bespoke wallet cracking panels running the same custom tool the box itself served. Static analysis, dynamic detonation, infrastructure mapping, full signals, hashes, and defanged indicators, with every proven thing kept apart from every assessed one." />
+  <link rel="icon" type="image/x-icon" href="/images/favicons/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicons/favicon-16x16.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicons/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/images/favicons/favicon-192x192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicons/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <link rel="stylesheet" href="/platform/styles/core.css" />
+  <style>
+    /* Report-specific additions, built from core.css tokens so it stays native */
+    .article figure { margin: var(--space-6) 0; }
+    .article figure img {
+      width: 100%;
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-3);
+      background: var(--bg-2);
+    }
+    .article figcaption {
+      margin-top: var(--space-2);
+      font-size: 0.82rem;
+      color: var(--text-3);
+      text-align: center;
+    }
+    .key-list { list-style: none; padding: 0; margin: var(--space-4) 0; }
+    .key-list li {
+      position: relative;
+      padding: 10px 0 10px 22px;
+      border-bottom: 1px solid var(--border-soft);
+      color: var(--text-1);
+    }
+    .key-list li::before {
+      content: "";
+      position: absolute; left: 0; top: 17px;
+      width: 8px; height: 8px;
+      background: var(--accent);
+      transform: rotate(45deg);
+    }
+    .callout-note {
+      background: var(--bg-2);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 var(--radius-2) var(--radius-2) 0;
+      padding: var(--space-3) var(--space-5);
+      margin: var(--space-5) 0;
+      color: var(--text-1);
+      font-size: 0.95rem;
+    }
+    .callout-note strong { color: var(--text-0); }
+    .veggie {
+      background: var(--bg-2);
+      border: 1px dashed var(--border-soft);
+      border-radius: var(--radius-3);
+      padding: var(--space-3) var(--space-5);
+      margin: var(--space-5) 0;
+      color: var(--text-1);
+      font-size: 0.93rem;
+    }
+    .veggie strong { color: var(--text-0); }
+    .ioc-block {
+      background: var(--code-bg);
+      border: 1px solid var(--code-border);
+      border-radius: var(--radius-3);
+      padding: var(--space-4) var(--space-5);
+      margin: var(--space-5) 0;
+      font-size: 0.85rem;
+    }
+    .ioc-block h4 { margin: 0 0 var(--space-2); color: var(--text-1); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    .ioc-block + .ioc-block { margin-top: calc(var(--space-5) * -0.4); }
+    .tier {
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-3);
+      padding: var(--space-3) var(--space-5);
+      margin: var(--space-4) 0;
+      background: var(--bg-2);
+    }
+    .tier h4 { margin: 0 0 var(--space-2); font-size: 0.9rem; color: var(--text-0); }
+    .tier.proven { border-left: 3px solid var(--accent); }
+    .tier.assoc  { border-left: 3px solid var(--text-3); }
+    .tier.unproven { border-left: 3px dashed var(--border-soft); }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <a href="/" class="brand"><span class="brand-mark">◯</span><span class="brand-name">Ghost in the Bit</span></a>
+    <nav class="site-nav-inline" id="site-nav-inline"></nav>
+  </header>
+
+  <main class="article">
+    <header class="article-header">
+      <h1 class="article-title">One Open Directory, a Self Extracting Alarm Killer, and the Room Where the Stolen Goods Become Money</h1>
+      <div class="article-meta">
+        <span class="category-pill">threat hunting</span>
+        <span class="category-pill">malware analysis</span>
+        <span class="category-pill">infrastructure</span>
+        <time datetime="2026 07 02">July 2, 2026</time>
+        <span>Threat hunting</span>
+        <span>46 min read</span>
+      </div>
+    </header>
+
+    <div class="callout-note">
+      <strong>One note before we start.</strong> Same house rules as always. I am not a career reverse engineer. The part I am good at is the part before the deep reversing, spotting the thing that looks off, tugging the thread slow, and saying I am not sure the second I am not sure. Everything below was pulled off live infrastructure through a throwaway cloud box built for that one job and torn down right after, never onto my own machine. Static analysis ran with no execution and no network, I parsed the file formats by hand. The samples were only ever detonated inside sandboxes I do not own, VirusTotal and ANY.RUN, never on anything of mine. I never touched a victim. Every address, hash, and command that could bite is defanged with square brackets, so refang before you paste anything anywhere that matters. This one runs long, because it starts on a single box and ends out in the infrastructure that box was plugged into. I flag exactly which findings are proven, which are only associated, and which I could not close.
+    </div>
+
+    <p>
+      I went looking for open directories handing out fresh built executables and walked into a rented Windows box in Frankfurt that was serving a whole toolkit in the open. Twelve files sitting in a public folder on a high port, no login, no shame. One of them was a program nobody on the planet had a record of yet, and it turned out to be the most interesting thing in the pile. On the outside it looks like a completely ordinary WinRAR self extracting archive, the kind of harmless double click installer people make every day. On the inside it carries a script whose entire job is to walk through Windows switching off every alarm one by one, then quietly unpack a locked box and let the monster out.
+    </p>
+
+    <p>
+      The monster, once it ran, phoned home to the same box it came from, on a connection wrapped in a self signed certificate that the operator set to stay valid until the year 2057. That is thirty one years of validity on a throwaway crime server. It is the digital equivalent of a burner phone with a lifetime warranty, and it is one of the cleaner fingerprints I have pulled off infrastructure in a while.
+    </p>
+
+    <p>
+      So this is one staging box, one operator, and three separate commodity families riding along together. A loader that turns Windows Defender into a decoration, a pair of Steam account thieves, and a remote access trojan hiding under a stack of disguises. Along the way I want to show you why one number in a file header told me half the file was a smuggling compartment before I read a single instruction, and why a program pretending to be Microsoft Edge is a lot less clever than it thinks.
+    </p>
+
+    <p>
+      That is the first half. The second half started when I stopped staring at the box and started asking what it was plugged into. A pivot off one small fingerprint led me two floors up, to the back office where the stolen goods get turned into money. I show my work at every joint on the way there, including the joints that did not hold.
+    </p>
+
+    <h2>The short version</h2>
+    <ul class="key-list">
+      <li>One staging host, <code>85.239.149[.]83</code> (AS207043, DEDIK SERVICES LIMITED, Frankfurt), a fresh Windows box internally named <code>WIN-DATVI7NFGIV</code>. It was serving an open directory of malware on port 8080 with no authentication.</li>
+      <li><code>Adryhyq.exe</code> is a genuine, unmodified WinRAR self extracting stub with an 804 KB archive smuggled onto the end of it. That archive carries a PowerShell script, <code>run.ps1</code>, that disables Defender, SmartScreen, Smart App Control, and every Attack Surface Reduction rule, then unpacks a password locked payload and installs it under a fake Windows Update name. This file was on no public feed anywhere. It was the only truly unseen sample in the pile.</li>
+      <li>Two native x64 files (<code>Eddy_VPN.exe</code> and <code>BERSERK.exe</code>, served under several gaming and VPN themed names) are Steam account stealers. They hook the Steam client login flow with an injected script marked <code>__berserk</code>, fake the success screen, and quietly ship your session token to a local listener.</li>
+      <li>Three .NET files (<code>Wacigo.exe</code>, <code>Yjzlxkdoi.exe</code>, <code>old.exe</code>) are the same remote access trojan built three times, wrapped in the .NET Reactor protector. The operator left a crash log in the webroot literally named <code>PureRAT_ThreadException.txt</code>, which both names the family and proves they ran it on the same box.</li>
+      <li>Detonation confirmed the whole chain end to end. On the clean run the RAT fired and called home to <code>85.239.149[.]83:56001</code>, a connection ANY.RUN flagged with a known RAT JA3S fingerprint and a certificate alert for being valid past 2029. The C2 that I could only assess from a port scan is now observed live.</li>
+      <li>A pivot off the box led to a back office host, <code>167.235.0[.]162</code> (Hetzner), running three bespoke tools: a stealer log aggregator, a crypto wallet cracking panel called <strong>Shadow Wallet Checker</strong>, and a credential analyzer called <strong>Shadow Checker v1.3</strong>. The wallet cracker is where stolen browser data gets turned into drained coins.</li>
+      <li><strong>Proven.</strong> The Shadow Wallet Checker panel is byte for byte identical across exactly three hosts internet wide, <code>167.235.0[.]162</code> (Hetzner), <code>87.58.206[.]99</code> (a second DEDIK host), and <code>144.31.151[.]202</code> (Kyonix). One custom tool, three servers, three providers. That is a small crew's back office, confirmed by a page fingerprint that returns three hosts and no more.</li>
+      <li><strong>Associated, not proven.</strong> The staging box and the back office host both ran the same custom tool, Shadow Checker v1.3. Same application, confirmed by an identical internal dictionary, differing only by a cosmetic layout revision. That ties the box to the back office by shared tooling. It stops short of proving one operator runs both, and I explain exactly why.</li>
+      <li>Nearly every sample was already on VirusTotal under a different random file name, which tells you the operator regenerates the file name for every victim while reusing the same payload underneath. One did not carry over, and it was the loader.</li>
+    </ul>
+
+    <h2>How I got here</h2>
+    <p>
+      Open directory hunting is exactly what it sounds like. A web server is misconfigured to hand out a plain listing of its own folders, that old <code>Index of /</code> page, and you go reading file names looking for things that should never be shared with the whole internet. The trick is seeding the search with words builders use and normal people never do. This time the seed that paid off was a plain one, servers advertising a directory full of <code>.exe</code> files on the little Python web server that people spin up when they are moving files around in a hurry and do not expect anyone to look.
+    </p>
+
+    <p>
+      That landed me on <code>85.239.149[.]83</code>, and the folder it was proudly listing on port 8080 was not subtle.
+    </p>
+
+    <pre><code>Directory listing for /
+  Adryhyq.exe
+  asd.exe
+  BERSERK.exe
+  easyAntiCheat.exe
+  easyAntiCheatUpdater.exe
+  Eddy_VPN.exe
+  iverify.ps1
+  old.exe
+  PureRAT_ThreadException.txt
+  verify.ps1
+  Wacigo.exe
+  Yjzlxkdoi.exe</code></pre>
+
+    <p>
+      Three things in that listing did the talking. The random looking names like <code>Adryhyq</code> and <code>Yjzlxkdoi</code> are what tooling spits out when it auto names a payload per victim. The friendly names like <code>easyAntiCheat</code> and <code>Eddy_VPN</code> are the costumes, gaming anti cheat and a VPN, the sort of thing you would talk someone into running. And then there is a file the operator clearly did not mean to leave lying around in public, <code>PureRAT_ThreadException.txt</code>, which is a crash log. A crash log in your own webroot is the malware equivalent of leaving your name tag on after your shift. It tells you what you are running and that you ran it right here. I held the verdict at suspected anyway and pulled the full host profile, because a file name is a label and not evidence.
+    </p>
+
+    <h2>What kind of box this is</h2>
+    <p>
+      The host profile turned a suspicious folder into a live operation. This is a Windows machine, and the ports it had open sort neatly into three jobs.
+    </p>
+
+    <pre><code>85.239.149[.]83   AS207043  DEDIK SERVICES LIMITED  Frankfurt, DE
+  135 / 139 / 445   SMB and RPC        standard Windows surface
+  1337  RDP                            operator's own remote desktop (cute port)
+  8080  Python SimpleHTTP              the open directory above (the payload tray)
+  56001 / 56002 / 56003   TLS, no HTTP  self signed listeners (the C2 tray)</code></pre>
+
+    <p>
+      Read that as a workbench. The 445 and RPC ports are just a real Windows box being a Windows box. Port 1337 is remote desktop on a deliberately jokey port, which is how the operator drives the machine. Port 8080 is the tray they hand payloads out of. And the three near identical listeners on 56001 through 56003 are where the interesting part lives, because every one of them presents the same self signed certificate, and that certificate is strange in a way that turns out to matter. Hold on to that port 1337 remote desktop habit too, because it shows up again later on a machine two floors up.
+    </p>
+
+    <pre><code>C2 listener certificate (ports 56001-56003)
+  Subject CN     Ggdnfld            (random string, not a real hostname)
+  Key            RSA 4096
+  CA flag        is_ca: true        (claims to be a certificate authority)
+  Valid until    2057               (~31 years out)
+  Self signed    yes</code></pre>
+
+    <div class="veggie">
+      <strong>Why a certificate that lasts until 2057 is a tell.</strong> A normal certificate is a short lived ID card. The ones protecting real websites are usually good for about ninety days, because the whole system assumes keys get rotated often and machines get replaced. When someone hand rolls a certificate that stays valid for three decades, they are telling you they never plan to rotate it, because the box will be dead and buried long before the paperwork expires. A thirty one year self signed certificate with a random name and the authority flag flipped on is not something a legitimate service ships. It is a throwaway ID a person made in ten seconds so their malware would have something to wrap its traffic in. And because they will reuse that exact certificate on the next box to save themselves the ten seconds, it becomes a thread you can follow.
+    </div>
+
+    <p>
+      Everything on the box was stood up in the same few days in mid June, certificates dated the seventeenth through the nineteenth. Fresh infrastructure, which is exactly what you want, because fresh means the samples are current and reversible instead of some stale artifact from a campaign that ended last year.
+    </p>
+
+    <h2>Meet the files, all twelve of them, which are really five</h2>
+    <p>
+      First pass is always identity. Pull every file, hash it, and see what is actually distinct. Twelve names came off the tray, but hashing collapses them fast, because the operator serves the same bytes under several costumes at once.
+    </p>
+
+    <pre><code>SHA256 (deduplicated to 5 unique payloads)
+
+ed3171b8abf77dcc65bb6801c784a3a5adf671332fa0ad38b81c5fd87005bcf3
+  Adryhyq.exe                          WinRAR SFX loader, native x64
+
+b4b9c4ed31cf8dfbfebc00bba45224b771d3b54502bc008882f4605352b88e94
+  Eddy_VPN.exe = asd.exe = easyAntiCheat.exe     Steam stealer, native x64
+
+b148b4544f738e4ab55e76d993bed98c315adab0c1bccf8a97f90b4d3f73986e
+  BERSERK.exe = easyAntiCheatUpdater.exe         Steam stealer (newer build)
+
+8df52dfb714967efdefae2b7b04051baae9129525e14e70fa5cfa3bb7cb5900d
+  Wacigo.exe                           .NET RAT (PureRAT), build A
+
+6f6177d18240f0675a2d42ffefbf869687b984fc32134efd13b904632f3c78f2
+  Yjzlxkdoi.exe                        .NET RAT (PureRAT), build B
+
+8c8222df6afd20474c31aa16841fd79bf28fe86a32881c2d91fe7c780fd4030f
+  old.exe                              .NET RAT (PureRAT), older build</code></pre>
+
+    <p>
+      So three Steam stealer copies are one file, two more are another, and three RAT builds round it out. Two native families and one managed family, five distinct things. That deduplication is itself a finding, because it shows the operator spraying the same payload under a rotating set of names, which is the same trick that later makes the VirusTotal results look busier than they are.
+    </p>
+
+    <p>
+      The star of the piece is the first one. <code>Adryhyq.exe</code> was the single file in the pile that no feed had ever seen, and it is the loader that makes the whole operation go. So that is the one I took apart to the studs.
+    </p>
+
+    <h2>The file nobody had seen, opened all the way up</h2>
+    <p>
+      My sandbox had no analysis libraries and no network, same as always, so I parsed the program format by hand in Python. Old fashioned, and it keeps you honest about what you are actually reading. The very first measurement told me where the real story was hiding.
+    </p>
+
+    <div class="veggie">
+      <strong>The one number that reveals a smuggling compartment.</strong> Every Windows program is laid out as a series of labeled sections, and the header at the front is supposed to account for the whole file. Add up where the last section ends and you should land at the end of the file. When you do not, when the file keeps going past the point the header says it stops, that leftover tail has a name. It is called an overlay, and it is dead space the program format does not track. Sometimes it holds something innocent. Very often it is a smuggling compartment, a place to hide a second file bolted onto the back of the first where a casual look will never notice it. On this file the header said the program ended at about 743 KB. The file itself was 1.5 MB. Half the file was riding in the trunk.
+    </div>
+
+    <pre><code>Adryhyq.exe   PE32+ x64   8 sections   compiled 2026-02-01
+  last section ends at   0x000b5800   (743,424 bytes)
+  file actually ends at  0x00179e33   (1,547,827 bytes)
+  overlay (the trunk)    804,403 bytes   ~52% of the whole file
+  first bytes of overlay 52 61 72 21 1a 07 01 00   =  "Rar!"  (a RAR archive)</code></pre>
+
+    <p>
+      The trunk was a RAR archive. So the outer program is a self extracting archive, the kind of thing where the executable part is just a small unpacker and the real cargo is the compressed bundle stapled to the back. That raised the one question that decides how you write the whole report. Is the unpacker itself a trojanized fake, custom built to look like WinRAR, or is it the real WinRAR self extractor being abused as an innocent wrapper. That distinction matters, because it changes what your detection should key on. So I went looking for provenance, and the file answered plainly.
+    </p>
+
+    <pre><code>Provenance markers inside the stub
+
+  debug PDB path      D:\Projects\WinRAR\SFX\build\sfxrar64\Release\sfxrar.pdb
+  export name field   sfxrar.exe
+  resources           standard WinRAR SFX dialogs (GETPASSWORD1, LICENSEDLG,
+                      REPLACEFILEDLG, RENAMEDLG, STARTDLG), plus the SFX
+                      manifest requesting administrator rights
+  TLS callbacks       none registered  (malware's favorite quiet-start hook, empty here)
+  section flags       normal: only .text executable, no writable+executable section
+  Authenticode        unsigned</code></pre>
+
+    <p>
+      That is stock WinRAR. The debug path is the real WinRAR build tree, the internal name is the real self extractor, and the section layout is boringly normal. A trojanized stub would have tripped at least one of those, and none of them tripped. So the correct read is a clean WinRAR self extractor being used as a delivery wrapper, with all of the malice living in the cargo. Which means a signature written against the stub bytes would false alarm on every legitimate self extracting archive in the world. You have to detect the cargo, not the box it shipped in. Good to know before writing a single rule.
+    </p>
+
+    <h3>Everything in the trunk</h3>
+    <p>
+      I walked the archive structure by hand, since the container had no RAR tool, and every stored piece checksummed clean, which is how I know I read it correctly.
+    </p>
+
+    <pre><code>Archive members (all stored uncompressed except the nested box)
+  CMT           179 B     the self extractor's config script
+  sfx.rar       218 KB    a nested archive, encrypted
+  UnRAR.exe     561 KB    a legitimate WinRAR command line tool (7.20)
+  install.vbs   98 B      a one line launcher
+  run.ps1       24 KB     the part that does the damage
+  QO            158 B     benign quick open metadata
+  (file ends on the RAR end-of-archive marker: nothing hidden after it)</code></pre>
+
+    <p>
+      Notice the shape of that. The archive carries its own copy of the real WinRAR unpacker, <code>UnRAR.exe</code>, so it does not have to hope one is installed on the victim. It brings its own tool. The config script sets the whole thing in motion silently.
+    </p>
+
+    <pre><code>CMT (the self extractor config)
+  Path=WindowsOptions
+  Setup=install.vbs
+  Silent=1
+  Overwrite=1</code></pre>
+
+    <p>
+      <code>Silent=1</code> means no window, no progress bar, nothing a victim would see. It extracts into a folder called WindowsOptions and runs <code>install.vbs</code>, which is a single line whose only job is to hand off to the real payload while staying invisible.
+    </p>
+
+    <pre><code>install.vbs
+  CreateObject("WScript.Shell").Run "powershell -ExecutionPolicy Bypass -File ""run.ps1""", 0, False</code></pre>
+
+    <p>
+      The <code>0</code> in there is the window mode, and it means hidden. The handoff reaches <code>run.ps1</code>, and that is where the polite fiction ends.
+    </p>
+
+    <h3>The part where it walks through your house turning off the alarms</h3>
+    <p>
+      The 24 KB script is written with Russian comments and a mutex named <code>WindowsOptions_Installer_Mutex</code> so only one copy runs at a time. Before it deploys anything, it methodically dismantles the defenses on the machine. I am going to list what it switches off, because the length of the list is the point.
+    </p>
+
+    <pre><code>run.ps1, the teardown, in order
+  UAC              ConsentPromptBehaviorAdmin -> 0        (stop asking permission)
+  SmartScreen      disabled across Explorer, Edge, AppHost, and Defender keys
+  Smart App Control  VerifiedAndReputablePolicyState -> 0, then runs  citool.exe -r
+  Defender (live)  Set-MpPreference disables: RealtimeMonitoring, BehaviorMonitoring,
+                   ScriptScanning, ArchiveScanning, RemovableDriveScanning,
+                   NetworkProtection, PUAProtection, MAPSReporting,
+                   ControlledFolderAccess, and sets CloudBlockLevel 0
+  Defender (registry)  DisableAntiSpyware and the Real-Time Protection disables
+  Defender service     stops and disables  wscsvc
+  Defender history     deletes the DetectionHistory folder (erase the receipts)
+  Exclusions       whitelists drive roots, the install dir, the script dir,
+                   and "C:\ProgramData\Microsoft DevDiv", plus every risky
+                   extension: exe, dll, bat, cmd, ps1, psm1, vbs, js
+  ASR rules        enumerates and disables every Attack Surface Reduction rule</code></pre>
+
+    <div class="veggie">
+      <strong>Why this is the moment the innocent reading dies.</strong> Any one of these could maybe be explained away by a very aggressive optimizer or a badly behaved installer. All of them, in sequence, cannot. There is no legitimate reason for a program to switch off tamper resistant antivirus, erase the antivirus history so nobody can see what it caught, disable the feature that asks your permission before something runs as administrator, and then whitelist every dangerous file type on the whole drive. Software you want does not blind your security tools before it introduces itself. Only software that expects to be caught does that.
+    </div>
+
+    <p>
+      Once the alarms are off, the script uses its bundled copy of the real WinRAR tool to open the locked box it brought along, and the password is sitting right there in the script.
+    </p>
+
+    <pre><code>run.ps1, the payload deployment
+  extracts   sfx.rar   with password  ByeFriend!   into  %ProgramFiles%\WindowsOptions
+  expects output        nvidia_dr64.exe
+  persists    Yjzlxkdoi.exe  via scheduled task (at logon, highest privileges)
+  runs it hidden, then shows a decoy: "Please restart your computer and launch the application again."
+  cleans up   kills nvidia_driver64 and scvhost, self-deletes on the cleanup path</code></pre>
+
+    <p>
+      The nested box is genuinely encrypted, not just password prompted, so its contents stay sealed to a static look. That is by design, and it is the one thing I could not read from the bytes alone. The password <code>ByeFriend!</code> is right there in the script, which is a small gift, but the encrypted payload only becomes real files when the script feeds that password to the unpacker at runtime. So this is the exact point where I had to stop reading and start watching. Hold that.
+    </p>
+
+    <h2>The two that steal your games</h2>
+    <p>
+      Before the RAT, the box was serving a second family entirely, dressed as anti cheat and VPN tools. Two builds, one stealer. Their imports read like a job description, and their own embedded script gives away the target.
+    </p>
+
+    <pre><code>Steam stealer imports (both builds)
+  CryptUnprotectData        (unlock saved secrets tied to your login)
+  WinHttp* + WS2_32         (send what it grabs)
+  bcrypt*                   (its own crypto)
+  CreateToolhelp32Snapshot, Process32*   (hunt for the Steam client)</code></pre>
+
+    <p>
+      The costume names are the delivery, and the internals are the theft. Inside both files is a block of JavaScript, marked throughout with the word <code>__berserk</code>, that hooks the Steam client's own login flow. It does not phish you on a fake website. It waits inside the real Steam client and rewrites the login as it happens.
+    </p>
+
+    <pre><code>__berserk harness, the moves it makes
+  hooks       flow.GetStatus  and  UpdateAuthSessionWithSteamGuardCode
+  fakes       the GetEResult success codes so the login looks normal to you
+  swaps       your login into a faked "OK" response
+  captures    refresh_token and account_name  (the live session, not just a password)
+  reads       config.vdf, loginusers.vdf, local.vdf  (existing sessions on disk)
+  exfil       http://127.0.0[.]1:6968/__callback/{creds,steam_guard_code,refresh_token,login_state}</code></pre>
+
+    <div class="veggie">
+      <strong>Why it phones a number inside your own computer.</strong> That <code>127.0.0[.]1</code> address is the machine talking to itself. The stealer does not send your Steam session straight to a faraway server. It hands it to a small helper listening on a quiet port on the same computer, and that helper does the sending. Splitting the job in two like that means the part a defender is most likely to inspect, the stealer itself, only ever makes calls that never leave the box, which looks a lot less alarming than an unknown program reaching out to the internet. The behavior to hunt is not the stealer's traffic. It is that odd little local conversation on port 6968.
+    </div>
+
+    <p>
+      Grabbing the <code>refresh_token</code> matters more than grabbing a password, because a live session token lets an attacker walk straight back into the account without ever needing your password or your second factor. That is why this reads as session hijacking rather than simple password theft. And keep the idea of a stolen live session in mind, because the back office I get to later has a whole tool built to sort exactly this kind of loot.
+    </p>
+
+    <h2>The three that are really one</h2>
+    <p>
+      The three .NET files are the same remote access trojan compiled three times. I did not need to detonate them to see they were siblings, because they share a fingerprint that survives recompilation.
+    </p>
+
+    <pre><code>Shared across all three .NET builds
+  identical protector constants   fourteen 64-char hex strings appear byte-for-byte
+                                  in all three files, e.g.
+    841F6FF48991C286754FBA5647CA30986070C8F457C22D30959D113010CC164C
+    C356AFF1A01C2B0DA472E584C8E3C8F875B9A24280435D42836A77B19F5A8C18
+  field naming   m_&lt;32 hex chars&gt;   (111, 125, and 123 occurrences)
+  crypto         RijndaelManaged + GZipStream + FromBase64String
+  runtime        .NET Framework 4.0</code></pre>
+
+    <p>
+      The operator handed me the family name for free. That crash log in the webroot, <code>PureRAT_ThreadException.txt</code>, is a .NET stack trace from a program built with the DevExpress interface toolkit. It both names PureRAT and shows it ran on the same machine that served it. The shared constants tell me the three builds came out of one protector, and the crash log tells me what they are.
+    </p>
+
+    <div class="veggie">
+      <strong>What a protector is, and why it leaves fingerprints anyway.</strong> A .NET program is unusually easy to read back into something close to its original source, so criminals run their code through a protector, a tool that scrambles the names and encrypts the logic to slow down anyone reversing it. The catch is that a given protector scrambles everything the same way every time, so the scrambling itself becomes a signature. Here the giveaway is a set of long hexadecimal constants and a very particular style of naming internal fields, both identical across all three files. The protector hid the code and, in doing so, stamped its own maker's mark on all three builds. Detonation later put a name on that protector too, which I will get to.
+    </div>
+
+    <h2>What happens when you actually let it run</h2>
+    <p>
+      Everything above came from reading files cold. Static analysis is the blueprint. It tells you every door a program knows how to open. It does not tell you which doors it actually walks through, or what is waiting behind them. So once the picture felt solid, I detonated the loader in ANY.RUN and watched. It took two runs to see the whole thing, and the gap between them is worth showing rather than smoothing over.
+    </p>
+
+    <h3>Run one: staged, but the monster stayed in its cage</h3>
+    <p>
+      The first run confirmed the whole loader chain exactly as I had read it from the bytes. The self extractor dropped its members into <code>C:\Program Files\WindowsOptions\</code>, the VBScript launched PowerShell, and PowerShell ran the bundled unpacker with the password I had pulled out of the script.
+    </p>
+
+    <pre><code>UnRAR.exe x -y -pByeFriend! "C:\Program Files\WindowsOptions\sfx.rar" "C:\Program Files\WindowsOptions\"</code></pre>
+
+    <p>
+      That command line is the payoff. The password <code>ByeFriend!</code> is confirmed live, and the unpacker dropped the payload to disk. But the payload itself did not get to run in that window. PowerShell exited with an error, a second loader instance died with a missing dependency code, and the RAT sat on disk without firing. The behavior signatures still lit up for the Defender and SmartScreen teardown, so the alarm killing was observed. The monster was just still in its cage. That is the honest result of run one, and reporting it as a full compromise would have been a lie.
+    </p>
+
+    <h3>Run two: the cage opens</h3>
+    <p>
+      Second run, longer window, and the payload fired. Here is the piece I had been chasing since the port scan.
+    </p>
+
+    <pre><code>Yjzlxkdoi.exe (PID 1176)  ->  85.239.149[.]83:56001   DEDIK-IO   GB   malicious
+
+Network threat signatures on that process:
+  MALWARE  Win32/Common RAT related JA3 hash observed
+  MALWARE  Win32/Common RAT related JA3S hash observed
+  HUNTING  TLS cert too long-lived (&gt;2029-12-31)</code></pre>
+
+    <p>
+      That is the whole thing closing shut. The RAT that the loader deployed called home to the same Frankfurt box it came from, on port 56001, one of the three listeners the port scan had flagged. The JA3 and JA3S hits are network fingerprints of the client and server sides of the encrypted handshake, and both matched known RAT patterns. And the certificate alert for being valid past 2029 is that thirty one year <code>Ggdnfld</code> certificate from the very start of this piece, showing up in the live traffic exactly as the scan promised. The C2 I could only assess from a port scan is now observed, live, with matching fingerprints on both ends.
+    </p>
+
+    <div class="veggie">
+      <strong>What a JA3 fingerprint actually catches.</strong> When two programs set up an encrypted connection, they exchange a burst of settings first, which cipher versions they support and in what order. Different software makes that opening move differently, and the exact pattern can be boiled down to a short fingerprint called JA3 for the client side and JA3S for the server side. Two unrelated pieces of malware built from the same kit tend to share the same opening move, so the fingerprint catches the family even when the traffic itself is encrypted and the address keeps changing. Here both the client and the server fingerprints matched known RAT patterns, which is a strong, address independent thread back to this kit.
+    </div>
+
+    <p>
+      Two more details from that run pinned things down. The dropped payload on disk was named <code>Yjzlxkdoi.exe</code>, but its hash was <code>8df52dfb...</code>, which is the file I had cataloged off the tray as <code>Wacigo.exe</code>. So the operator reuses one RAT build under multiple staged names, the same costume trick as the front door. Treat the on disk name as meaningless and pin everything to the hash. And ANY.RUN tagged the payload with the label <code>netreactor</code>, which finally put a name on that protector from the static section. The scrambler is .NET Reactor. The behavior signatures that fired alongside it, personal data theft, crypto wallet access, reading the machine GUID, all line up with PureRAT doing its job.
+    </p>
+
+    <h2>What the feeds already knew</h2>
+    <p>
+      With hashes in hand I checked the public feeds, and the split is the interesting part.
+    </p>
+
+    <pre><code>Per-sample on VirusTotal (all seen under RANDOM file names, a per-victim tell)
+  8c8222df (old.exe)         seen as "Tnzkdfm.exe"    41/68   Dapato / Kryptik
+  6f6177d1 (Yjzlxkdoi.exe)   seen as "Ntsoztomm.exe"  37/69   Dapato; one Trojan-Spy.MSIL.Agent
+  8df52dfb (Wacigo.exe)      seen as "Htholrzc.exe"   45/69   Dapato dropper
+  b4b9c4ed (Eddy_VPN etc)    seen as "2kcys5xbd.exe"  27/69   Tedy / Sabsik / Wacatac
+  b148b454 (BERSERK etc)     seen as "e50g21.exe"     15/50   Yogi (newest, least detected)
+
+  ed3171b8 (Adryhyq.exe)     NOT ON VIRUSTOTAL        the loader was unseen anywhere</code></pre>
+
+    <p>
+      Two things fall out of that. First, every sample that was on the feed was there under a different random name than the one it wore on the tray, which is the per victim renaming showing up in the wild. Second, and this is the one that matters, the loader was on no feed at all. That is not reassuring. It means the most defensively aware component in the whole kit, the one that switches off the alarms, had zero detections because nobody had submitted it, not because it is clean. That made it the highest value thing in the pile to push to the feeds, and I already had the bytes.
+    </p>
+
+    <p>
+      Worth being precise about the family labels, since I would rather be exact than tidy. The crowd on VirusTotal calls the .NET files things like Dapato and Kryptik, which are generic buckets for a malicious .NET dropper, not the name PureRAT. So the PureRAT identification rests on the operator's own crash log plus the shared build and the .NET Reactor packing that detonation confirmed, and the feed corroborates malicious .NET RAT without itself printing the family name. That is a strong stack of evidence, and it is honest about which brick is carrying which load.
+    </p>
+
+    <p>
+      That could have been the end of it. I had the box characterized, the chain proven, the samples ready for the feeds. But that crash log and the per victim naming both said the same thing between the lines. This is not a hobbyist. This is a supply chain. Somewhere the stolen goods get sorted and sold. So I stopped reversing files and started mapping infrastructure, and that is the second half.
+    </p>
+
+    <h2>The thread that led off the box</h2>
+    <p>
+      When you want to know what a crime box is connected to, you do not guess. You take the box's own fingerprints, the certificates it presents, the software banners it serves, the odd page titles it hands out, and you ask the internet wide scanners which other machines share any of them. Most of what comes back is noise, because a Windows box shares its remote desktop fingerprint with millions of innocent Windows boxes. The job is to throw away the common stuff and keep only the signal that is rare enough to mean something.
+    </p>
+
+    <p>
+      I ran the box through my own pivoting tool, which scores each fingerprint by how many other hosts on the whole internet carry it. A fingerprint on four hundred thousand machines tells you nothing. A fingerprint on two tells you a lot. Almost everything on the box scored as noise, the generic Windows handshake, the standard remote desktop stack, the auto generated machine name. One line did not. One of the page titles the box was serving was rare, and it linked the box to exactly one other machine.
+    </p>
+
+    <pre><code>rare in-band signal off 85.239.149[.]83
+
+  http.title  "Shadow Checker v1.3"     seen on 2 hosts internet-wide
+                                        -> 85.239.149[.]83   (the box)
+                                        -> 167.235.0[.]162   (a machine I had never seen)</code></pre>
+
+    <p>
+      A page title called "Shadow Checker v1.3" that exists on precisely two servers on the whole internet (That have been scanned at the time of investigation) is the kind of thread you follow. It is not a stock product name, it is not something a hosting panel ships, it is a bespoke tool wearing a version number. So I went and pulled the profile on that second machine, <code>167.235.0[.]162</code>, and it turned out to be a very different kind of box from the one I started on.
+    </p>
+
+    <div class="veggie">
+      <strong>Why a rare title beats a common certificate for this.</strong> You might expect the certificate to be the best thread, since I made such a fuss about the 2057 one. But a fingerprint is only useful for linking if it is both rare and shared. The box's remote desktop certificate is unique, which sounds great until you realize unique means it is on one host and links to nothing. The generic Windows handshakes are shared, but they are shared with half the internet, so they link to everything and therefore to nothing useful. The sweet spot is a fingerprint that a small number of machines share and almost nobody else has. A hand named tool title that appears on two hosts and nowhere else is exactly that sweet spot. It is rare enough to be meaningful and shared enough to be a link.
+    </div>
+
+    <h2>The back office</h2>
+    <p>
+      The second machine, <code>167.235.0[.]162</code>, sits on Hetzner in Germany, a mainstream provider, which is already a small tell that this is a different job from the bulletproof adjacent box in Frankfurt. Where the first box was a workbench for building and shipping malware, this one is a control room. It runs three separate web panels at once, and read together they describe an assembly line.
+    </p>
+
+    <pre><code>167.235.0[.]162   AS24940  Hetzner Online GmbH  Falkenstein, DE
+  80    "Mini Backup Server Dashboard"   stealer-log intake, sorted by country
+  1337  RDP                              operator remote desktop (same cute port as the box)
+  7777  "Shadow Checker v1.3"            credential / session analyzer
+  8000  "Shadow Wallet Checker"          crypto wallet cracking console</code></pre>
+
+    <p>
+      That port 1337 remote desktop is the same jokey choice the Frankfurt box made, which is a soft echo and nothing more on its own. The three panels are the substance. The "Mini Backup Server Dashboard" on port 80 has a boring, deliberately forgettable name, and underneath it is an intake dashboard that sorts stolen logs by country. "Shadow Checker v1.3" on port 7777 is the same tool the Frankfurt box was serving, which I will come back to, because that shared tool is the whole reason these two machines are in the same story. And "Shadow Wallet Checker" on port 8000 is the one that shows what the whole pile of stolen data was ever for, so that is where I am going next.
+    </p>
+
+    <h2>The cash register</h2>
+    <p>
+      The panel on port 8000 loaded without asking me for a password. No login, no gate, the whole console right there in the browser. It is titled "Shadow Wallet Checker," it runs a Russian first interface with an English toggle, and it is unmistakably a purpose built machine for one job, turning stolen data into stolen cryptocurrency.
+    </p>
+
+    <div class="veggie">
+      <strong>What this panel is actually for.</strong> A stealer like the ones on the Frankfurt box scoops up whatever it can off a victim, saved passwords, browser cookies, and the wallet files that crypto apps leave sitting on disk. That raw haul is not money yet. It is a pile of locked boxes. This panel is the machine that opens them. You point it at a folder of stolen victim data, it finds every crypto wallet file inside, and it grinds through guesses until it cracks the secret phrase that unlocks each one. Then it checks which of the cracked wallets actually hold a balance worth taking, and it pings the operator over Telegram the moment it finds one with money in it. This is the cash register at the end of the whole operation, the step that quietly turns a stolen browser profile into somebody else's coins in somebody else's pocket.
+    </div>
+
+    <p>
+      The target list is the part that makes the scale land. The console lays out a grid of eighty one different wallet products to hunt for, each tagged by blockchain and by a priority rating the operator assigned. This is not a script that checks one wallet. It is a factory floor built to drain every major wallet on every major chain.
+    </p>
+
+    <pre><code>Shadow Wallet Checker, a sample of the 81-wallet target grid
+  MetaMask   Phantom   Trust Wallet   Exodus Web3   Coinbase Wallet
+  Binance    OKX       Rabby          Keplr (Cosmos)   Ronin
+  Solflare   Sui Wallet  Tonkeeper (TON)   TronLink   ArgentX / Braavos (Starknet)
+  ...and dozens more, tagged EVM / SOLANA / COSMOS / SUI / TON / TRON / CARDANO / HEDERA
+
+Features visible in the console
+  point-at-folder scan of stolen "data" directories
+  seed-phrase extraction + brute force against wallet vaults
+  live balance checking on cracked addresses
+  Telegram alert on any crack above a value threshold
+  a contract watch list, and an RMTX-prefixed license key system</code></pre>
+
+    <p>
+      That last line matters. The panel is a licensed product. It has a license activation screen that wants a key beginning with <code>RMTX</code>, and it shows a license tier and an expiry. A tool with a license system is a tool that gets sold or rented to more than one customer. Hold on to that, because it is the exact reason I stop short of the strongest possible claim when I get to tying this back to the box, and I would rather flag it now than let you assume more than the evidence carries.
+    </p>
+
+    <h2>Making sure it was real, and not a stock page</h2>
+    <p>
+      Here is where I had to check my own excitement. It is easy to find a scary looking panel and start drawing lines to it. The honest question is whether that panel is genuinely a rare, hand built thing tying a small set of machines together, or whether it is some common off the shelf page that happens to appear on a lot of unrelated servers and links to nothing. So before I clustered anything, I made the page prove it was rare.
+    </p>
+
+    <div class="veggie">
+      <strong>Why an identical page on three servers is not a coincidence.</strong> Every web page can be boiled down to a single fingerprint, a hash, where the tiniest change to the page produces a completely different fingerprint. Lots of servers share a page fingerprint by pure accident, because they all serve the same blank welcome page that ships with the web server software, the digital equivalent of every new house having the same white walls. So a matching fingerprint on its own can mean nothing. What matters is what the page actually is. This one is not a blank wall. It is a sixty odd kilobyte hand built control panel for cracking crypto wallets, custom code that no software ships by default. So when I asked the internet wide scanners how many servers serve this exact page fingerprint, the number was the whole test. A stock default page comes back on millions of hosts. A private tool comes back on the handful of machines its owners run.
+    </div>
+
+    <p>
+      The answer was three. Not three thousand, not thirty. The exact page fingerprint of the Shadow Wallet Checker console returned three hosts across the whole internet and no more.
+    </p>
+
+    <pre><code>Shadow Wallet Checker panel, exact page fingerprint
+  body SHA-256  d5b3a9cc9735621e77ba9a0a2dcd8f4cc044e7a21bdf3d716f13f8e5dd4cd0c4
+
+  hosts serving that byte-for-byte identical page (confirmed on Censys):
+    167.235.0[.]162   Hetzner  (AS24940)   Falkenstein, DE
+    87.58.206[.]99    DEDIK    (AS207043)   Zoetermeer, NL   &lt;- a SECOND DEDIK host
+    144.31.151[.]202  Kyonix   (AS210457)   Frankfurt, DE
+
+  count internet-wide: exactly 3.  Not a stock page. A small crew's back office.</code></pre>
+
+    <p>
+      Three machines, three different providers, one custom tool served byte for byte identical on all of them. I confirmed that four separate ways so I would not be leaning on a single scanner's word. The rare title matched on two scanners, the exact page fingerprint matched on the scanner that indexes it and returned exactly those three hosts, and then I loaded the live panel in a throwaway browser and watched the eighty one wallet console render for real. A stock page does not survive all four of those checks. This one did. So the cluster is proven, and I will say it plainly, this is a genuine, hand built crypto wallet cracking operation running across three hosts, and one of those three is a second machine on the same DEDIK network as the box I started on.
+    </p>
+
+    <p>
+      One more detail worth banking. The two machines in the cluster that expose remote desktop both present the same style of throwaway certificate, an auto generated <code>VM-</code> followed by a long random identifier. That is a build habit, a corroborator, not a fingerprint I would hang attribution on by itself, because that certificate style is a common Windows default. It stacks on top of the page fingerprint. It does not stand in for it.
+    </p>
+
+    <h2>Reading the app's own words, so the intent is not a guess</h2>
+    <p>
+      A wallet grid and a scary name are not proof of anything on their own. A careful reader, or a hosting provider's abuse desk, or a lawyer, can wave all of that away with one sentence, that it is just a portfolio balance checker or a wallet auditor or some security research tool. So I refused to rest the malice verdict on the look of the thing. I pulled the live panel down myself from two of the cluster hosts and read the application's own code, the variable names and status strings the author wrote for their own use, because those do not lie about intent the way a title can. The two live pulls were byte for byte identical to each other, so what follows is the same application on both machines.
+    </p>
+
+    <p>
+      Here is what the tool counts and does, quoted from its own client side code.
+    </p>
+
+    <pre><code>from the live Shadow Wallet Checker (pulled first-hand, identical on 167.235.0[.]162 and 144.31.151[.]202)
+
+  stats it tracks:   { clients_scanned, wallets_found, passwords_tried, seeds_extracted }
+  result action:     navigator.clipboard.writeText( found[0].seed_phrase )
+  scan prompt:       "No wallet vaults found. Check the directory and run a scan."
+  result state:      Found / Найдены ("found")  +  panel.found_at  (a crack timestamp)</code></pre>
+
+    <div class="veggie">
+      <strong>Why these exact words end the argument.</strong> A wallet balance checker only ever needs a public address, the equivalent of a bank account number you can safely read a balance from. It never needs, and would never store, a <code>seed_phrase</code>, because the seed phrase is the master key, the twelve or twenty four secret words that hand over total control of a wallet. This tool has a counter for <code>seeds_extracted</code> and another for <code>passwords_tried</code>, and a button that copies a recovered <code>seed_phrase</code> to the clipboard. Put plainly, it takes a folder of stolen victim data, hunts through it for wallet vault files, grinds passwords against them until it recovers the master key, and hands that key to the operator. Counting extracted seeds and tried passwords is the machinery of theft, written in the author's own field names. There is no reading of that where the tool is auditing wallets its owner is allowed to touch.
+    </div>
+
+    <p>
+      The word <code>clients_scanned</code> is quietly the darkest one. The tool does not call them wallets or files, it calls them clients, and it counts how many it has scanned, because each folder of stolen data is one victim. The paired "Mini Backup Server Dashboard" on port 80 is the other end of that same vocabulary. It is an intake console that tallies stolen <code>passwords</code> and <code>cookies</code> and breaks them down by victim <code>country</code>, with a flag next to each. So one panel receives and sorts the stolen logs by country, and the other panel cracks the wallets out of them. Ingestion on one port, monetization on another, on the same machine.
+    </p>
+
+    <p>
+      I want to be just as precise about the two things I could not stand up, because leaving a crack in a malice claim is how the whole report loses its footing. First, an earlier broad search hinted at a Telegram <code>chat_id</code>, but when I pulled the surrounding code there was no bot token and no <code>api.telegram.org</code> endpoint in the page. The exfil plumbing lives server side, behind the panel, so I will say the tool has a results and settings surface consistent with pushing hits out, and I will not claim a proven Telegram channel I could not see. Second, the intake dashboard rendered no actual victim records to me. Its country table is filled in at runtime from an internal feed the public page does not contain, so I retrieved zero real IPs, credentials, or machine names. That is the outcome I wanted. I can prove what the dashboard is for from its own labels and math without ever pulling a scrap of a victim's data, and none was touched.
+    </p>
+
+    <div class="callout-note">
+      <strong>A note on how I read this.</strong> Everything quoted above is the operator's application code, the variable names and interface strings, not any victim's data. I pulled the panels with a plain anonymous request, read only what the server hands an unauthenticated visitor, and never logged in, submitted a field, or ran a scan. The point was to prove intent from the code, not to operate the tool or to see anyone's stolen wallets, and I did neither.
+    </div>
+
+    <h2>Following it back to the box</h2>
+    <p>
+      So the cluster of three is proven and it is a monetization operation. But proving the cluster does not prove the thing you actually want, which is that the cluster is connected to the Frankfurt box I started on. The only thread reaching back to the box was that shared title, "Shadow Checker v1.3," on the Hetzner host. A shared title is thin evidence. Two different tools can wear the same name. I have been burned by that exact thing before, so I refused to write the box into the cluster on a title alone, and I went and did the work to see whether the tie was real.
+    </p>
+
+    <p>
+      The right way to test a shared title is to stop trusting the label and compare the actual pages. I reproduced the original observation straight from the primary source, confirmed both the box and the Hetzner host still showed up under that title on precisely two servers and no others, then I pulled the full page body from each and compared them line by line. The verdict was clear, and it landed in a careful middle place.
+    </p>
+
+    <pre><code>Shadow Checker v1.3, box vs back-office host
+
+  85.239.149[.]83 : 8000    "Shadow Checker v1.3"   (page fingerprint A, seen 2026-06-14)
+  167.235.0[.]162 : 7777    "Shadow Checker v1.3"   (page fingerprint B, seen 2026-07-01)
+
+  page fingerprints DIFFER, so the pages are NOT byte-for-byte identical.
+  BUT the two pages share:
+    - an identical internal text dictionary, every menu key byte-for-byte the same
+      (nav.audit, nav.sorter, panel.jwt, panel.entropy, panel.mitre, panel.sub_technique, ...)
+    - the same fonts, the same colour palette, the same layout skeleton
+  The only differences are cosmetic: a slightly darker background and a
+  reworked tile grid. Same application, two build revisions.</code></pre>
+
+    <p>
+      That internal dictionary is the tell. Two teams writing two different tools never produce a byte for byte identical set of internal menu keys, right down to a "sub technique" field and a MITRE tag. That is one codebase. The reason the two page fingerprints did not match is mundane, one host is running a slightly newer build with a darker theme and a tweaked grid. So the box and the back office host are running the same custom tool, and that is a real, reproducible link. But look at what those menu keys describe, because it also tells you what Shadow Checker v1.3 is for.
+    </p>
+
+    <div class="veggie">
+      <strong>What the second tool does, read off its own menus.</strong> The wallet cracker turns stolen data into coins. Shadow Checker v1.3 is the tool that sorts the loot before the cracker gets it. Its internal menu keys give it away, entries for parsing cookies and JWTs, scoring the entropy of secrets, flagging live sessions, tagging findings against MITRE technique numbers. Remember the Steam stealer earlier grabbing a live <code>refresh_token</code> instead of a password, because a live session walks straight back into an account. This is the panel where a pile of stolen sessions and credentials gets triaged and ranked for exactly that. It is the sorting table between the raw stealer logs and the cash register.
+    </div>
+
+    <p>
+      So the two halves of this report connect through a shared bespoke tool, and the tools themselves describe a clean assembly line. The Frankfurt box builds and ships the malware and runs the C2. The stealers harvest credentials, sessions, and wallet files off victims. The back office aggregates those logs, sorts them with Shadow Checker, and drains the wallets with Shadow Wallet Checker. That is the whole pipeline, delivery on one end and monetization on the other, tied together by a tool that appears on both ends.
+    </p>
+
+    <h2>The corrections I made getting here</h2>
+    <p>
+      I want to show the joints that did not hold, because a hunt that only reports its wins is lying by omission, and the discipline of pulling a claim the moment it fails is the only thing that makes the claims that survive worth trusting.
+    </p>
+    <p>
+      <strong>The certificate I thought was shared.</strong> Early on I believed the box and the back office host presented the same hand rolled remote desktop certificate, which would have been strong glue, a single unique key on both machines. When I actually counted, that certificate sat on the back office host alone, on one machine, linking to nothing. So I pulled the claim. It was never evidence, it was a misread, and it does not appear in the case.
+    </p>
+    <p>
+      <strong>The fourth host that was not one.</strong> A separate scanner briefly showed a fourth machine, <code>150.241.66[.]251</code>, under the wallet checker title. When I pulled its history it turned out to be a recycled address with a completely different past life, a Cloudflare fronted box with a Discord themed certificate, and the confirming scanners did not place the panel on it. So I dropped it as unconfirmed and stale rather than let it pad the cluster. The proven cluster is three, not four.
+    </p>
+
+    <p>
+      <strong>The takedown lifecycle, which is itself a finding.</strong> By the time I went to pull the raw Shadow Checker v1.3 pages from both machines for the final comparison, both of them were already gone. The box had closed the port outright and the back office host had firewalled it off. The wallet cracker and the log dashboard were still up, but the sorting tool had been torn down on both ends within days of being scanned. That stand up, serve, tear down rhythm is exactly why tools like this never reach the public feeds, and it is the reason the shared title only ever showed on a single scanner. I got the comparison from cached copies the scanners had already grabbed, and I say so plainly, because a cached page is not a live pull and the reader deserves to know which one I had.
+    </p>
+
+    <h2>What is proven, what is associated, what is not</h2>
+    <p>
+      Here is the whole case sorted into tiers, so nobody has to guess which brick is carrying which load.
+    </p>
+
+    <div class="tier proven">
+      <h4>Proven</h4>
+      <p>
+        The Frankfurt box is a live malware staging and C2 host, characterized end to end, with the RAT observed beaconing back to it on the 2057 certificate. Separately, a bespoke crypto wallet cracking operation runs across exactly three hosts, <code>167.235.0[.]162</code>, <code>87.58.206[.]99</code>, and <code>144.31.151[.]202</code>, tied together by a byte for byte identical custom panel whose page fingerprint returns those three hosts and no others. One of the three is a second machine on the same DEDIK network as the box. And the panel's malice is proven from its own code, not inferred from its name, it extracts wallet <code>seed_phrase</code> values, counts <code>seeds_extracted</code> and <code>passwords_tried</code> against scanned victim directories, and pairs with an intake dashboard that aggregates stolen passwords and cookies by victim country. Every piece of that stands on its own, on hard evidence.
+      </p>
+    </div>
+
+    <div class="tier assoc">
+      <h4>Associated, not proven</h4>
+      <p>
+        The Frankfurt box and the back office cluster are linked by a shared bespoke tool, Shadow Checker v1.3, confirmed as the same application by an identical internal dictionary and differing only by a cosmetic build revision. That is a strong tooling link, corroborated by both sides sitting on the DEDIK footprint and by a shared throwaway certificate style. It means the box runs the same custom tool as a machine that is itself a proven member of the monetization cluster. It does not, by itself, prove a single operator runs both.
+      </p>
+    </div>
+
+    <div class="tier unproven">
+      <h4>Not proven, and I will not claim it</h4>
+      <p>
+        That one operator runs both the delivery box and the monetization cluster. I could not recover a single shared secret to nail it down, no shared Telegram token, no shared license key, no matching payload hash across the two sides. And the wallet cracker is a licensed product with an <code>RMTX</code> key system, which means the same tool could sit in the hands of more than one customer. Same tool plus same reseller is a strong association. It is not proof of one hand, and I am not going to dress it up as more than that.
+      </p>
+    </div>
+
+    <h2>Attribution, kept on a short leash</h2>
+    <p>
+      What I can stand behind on the box is that one operator ran that whole machine. The loader, the lures, the Steam stealers, and the RAT all sat in one open directory on one fresh Windows host, the RAT beacons back to that same host, and the crash log ties the PureRAT builds to the machine that served them. That is one hand on the wheel, observed, not guessed.
+    </p>
+    <p>
+      What I can stand behind on the cluster is that the three wallet cracker hosts are the same operation, because they serve the same custom tool byte for byte, and that the delivery box is running a tool shared with that operation. What I will not claim is a named actor, or that the delivery and the monetization are provably the same person. The providers are DEDIK, Hetzner, and Kyonix, the boxes are rented, and rented boxes can have more than one tenant over time. I have no persona, no email, no wallet. This is infrastructure attribution, not people attribution, and I am not going to dress a guess up as more than that. On the family, PureRAT is the assessed name resting on the operator's own artifact and the confirmed .NET Reactor packing, and I would report it exactly that way, named but marked as assessed rather than as a signature match.
+    </p>
+
+    <h2>The tracking signatures</h2>
+    <p>
+      Throwaway infrastructure gets rebuilt the moment it burns, so the durable value is in the fingerprints that survive a redeploy. These are the ones to watch, on both the delivery side and the monetization side.
+    </p>
+
+    <pre><code>Delivery side (the box)
+  C2 (observed live):          85.239.149[.]83 : 56001 / 56002 / 56003
+  C2 certificate CN:           Ggdnfld   (RSA 4096, is_ca:true, valid to 2057, self-signed)
+  C2 handshake:                RAT-associated JA3 / JA3S (flagged by ANY.RUN)
+  Loader family:               WinRAR SFX dropper (stock stub + malicious cargo)
+  Payload family:              PureRAT (.NET, .NET Reactor protected) [assessed]
+  Steam stealer family:        "__berserk" Steam session stealer
+  SFX password:                ByeFriend!
+  Installer mutex:             Global\WindowsOptions_Installer_Mutex
+  Persistence task:            "WindowsUpdateService"  (at logon, highest)
+  Disguised drops:             msedge.exe, msedge_view.exe (in %APPDATA%\Windows)
+  Steam exfil callback:        http://127.0.0[.]1:6968/__callback/...
+  Defender exclusion artifact: "C:\ProgramData\Microsoft DevDiv"
+  Operator artifact:           PureRAT_ThreadException.txt (left in the webroot)
+
+Monetization side (the cluster)
+  Wallet cracker panel:        "Shadow Wallet Checker"  (Russian-primary, 81-wallet grid)
+  Panel body SHA-256:          d5b3a9cc9735621e77ba9a0a2dcd8f4cc044e7a21bdf3d716f13f8e5dd4cd0c4
+  Log aggregator panel:        "Mini Backup Server Dashboard"
+  Credential/session sorter:   "Shadow Checker v1.3"  (shared with the box)
+  License system:              RMTX-prefixed keys
+  Exfil channel:               Telegram bot alert on cracked wallets with a balance
+  Cluster hosts:               167.235.0[.]162 (Hetzner), 87.58.206[.]99 (DEDIK),
+                               144.31.151[.]202 (Kyonix)
+  RDP habit:                   port 1337 on both the box and the Hetzner host
+  Cert build habit:            auto-generated "VM-&lt;guid&gt;" self-signed RDP certs on cluster hosts</code></pre>
+
+    <div class="veggie">
+      <strong>Which fingerprint I trust most, and why it is different for each half.</strong> On the delivery box, the thing an operator carries from machine to machine is the certificate they hand rolled for their C2, because remaking it is a small annoyance they would rather skip. So the <code>Ggdnfld</code> certificate is worth more as a hunting seed than any hash on that side. On the monetization side, the durable seed is the panel itself. The wallet cracker is a hand built page whose exact fingerprint returns three hosts and nothing else, so that fingerprint is a near perfect tripwire. If either of those turns up on a new host, that is a strong thread back to the same hands. Hashes rotate per victim, file names are costumes, and the boxes get wiped the day they burn. The certificate and the panel do not.
+    </div>
+
+    <p>
+      I turned the durable delivery side pieces into a YARA rule so the next build trips a wire even when the hash rotates. It keys on the cargo, never the WinRAR stub, so it will not false alarm on legitimate self extracting archives. Refang the C2 and callback strings before you compile.
+    </p>
+
+    <pre><code>import "pe"
+
+rule dedik_sfx_loader_cargo
+{
+    meta:
+        description = "WinRAR SFX carrying the Defender-teardown installer run.ps1"
+        author      = "ghostinthebit"
+        date        = "2026-07-02"
+    strings:
+        $cfg1   = "Path=WindowsOptions" ascii wide
+        $cfg2   = "Setup=install.vbs" ascii wide
+        $vbs    = "powershell -ExecutionPolicy Bypass -File \"\"run.ps1\"\"" ascii wide
+        $mutex  = "WindowsOptions_Installer_Mutex" ascii wide
+        $pw     = "ByeFriend!" ascii wide
+        $nv     = "nvidia_dr64.exe" ascii wide
+        $sac    = "VerifiedAndReputablePolicyState" ascii wide
+        $devdiv = "Microsoft DevDiv" ascii wide
+        $rar5   = { 52 61 72 21 1A 07 01 00 }
+    condition:
+        uint16(0) == 0x5A4D and $rar5 and 2 of ($cfg1,$cfg2,$vbs)
+        and ( $mutex or $pw or ($sac and $nv) or $devdiv )
+}
+
+rule dedik_berserk_steam_stealer
+{
+    meta:
+        description = "Native Steam session stealer, __berserk login-hook harness"
+        author      = "ghostinthebit"
+    strings:
+        $cb   = "127.0.0.1:6968/__callback/creds?login=" ascii wide   /* refang */
+        $b1   = "__berserk_pending_creds" ascii wide
+        $b2   = "__berserk_inject_token" ascii wide
+        $s1   = "UpdateAuthSessionWithSteamGuardCode" ascii wide
+        $s2   = "loginusers.vdf" ascii wide
+    condition:
+        uint16(0) == 0x5A4D and ($cb or (2 of ($b1,$b2) and 1 of ($s1,$s2)))
+}
+
+rule dedik_purerat_dotnet
+{
+    meta:
+        description = "PureRAT .NET builds, shared .NET Reactor protector constants"
+        author      = "ghostinthebit"
+    strings:
+        $k1 = "841F6FF48991C286754FBA5647CA30986070C8F457C22D30959D113010CC164C" ascii
+        $k2 = "C356AFF1A01C2B0DA472E584C8E3C8F875B9A24280435D42836A77B19F5A8C18" ascii
+        $k3 = "C61B1941CF756EB7551F7C661743802362728B785ADC22E860D269713DFB01A6" ascii
+        $c1 = "RijndaelManaged" ascii
+        $c2 = "GZipStream" ascii
+    condition:
+        uint16(0) == 0x5A4D and pe.imports("mscoree.dll") and 2 of ($k*) and all of ($c*)
+}</code></pre>
+
+    <p>
+      For the network side, the cheap catches that survive a rebuild: any outbound TLS to <code>85.239.149[.]83</code> on 56001 through 56003, any handshake matching the RAT JA3S, any certificate presenting <code>CN=Ggdnfld</code> or a self signed certificate valid past 2029 from an unknown host, and any new host serving the Shadow Wallet Checker panel fingerprint or the "Mini Backup Server Dashboard" and "Shadow Checker" titles. On the endpoint, the single highest fidelity signals are a scheduled task named <code>WindowsUpdateService</code> pointing anywhere outside <code>C:\Windows</code>, a process writing <code>msedge.exe</code> into <code>%APPDATA%\Windows</code>, and that loopback conversation on port 6968.
+    </p>
+
+    <h2>What I am not claiming</h2>
+    <p>
+      <strong>On the RAT family.</strong> PureRAT is the name I am putting on the three .NET files, and I want to be exact about why. The name comes from the operator's own crash log and is backed by the confirmed .NET Reactor packing and the matching behavior at detonation. It is not a clean single tool signature that printed the word PureRAT, so I am marking it assessed with strong support rather than proven by label.
+    </p>
+    <p>
+      <strong>On the Steam stealer.</strong> The credential theft and the session hijack I read directly out of the samples' own code, so that part is proven from the bytes. The VirusTotal labels for those files are generic, so I am leaning on the code, not the crowd, for what those two do.
+    </p>
+    <p>
+      <strong>On the cluster link.</strong> The three wallet cracker hosts are the same operation, proven by an identical custom panel. The delivery box shares a custom tool with that operation, which is a strong association. That the same person runs both the delivery and the monetization is the step I could not close, because I recovered no shared secret and the cracking tool is licensed to potentially more than one customer. I am reporting the association at association strength and no higher.
+    </p>
+    <p>
+      <strong>On the operator.</strong> One hand ran the delivery box, observed. Who that hand belongs to, I do not know, and the rented providers do not tell me. Infrastructure attribution, not people attribution.
+
+    <h2>What to actually do about it</h2>
+    <p>
+      <strong>If you are defending a network.</strong> Block and watch <code>85.239.149[.]83</code> on 56001 through 56003, and hunt the behavior rather than the hash, because the hash rotates per victim. The standout endpoint tells are a scheduled task named <code>WindowsUpdateService</code> that points outside <code>C:\Windows</code>, a burst of <code>Set-MpPreference</code> commands switching off Defender in sequence, <code>citool.exe -r</code> disabling Smart App Control, and a program writing itself as <code>msedge.exe</code> into your roaming profile. On the network, the RAT JA3S and that thirty one year certificate are both durable. And treat an infostealer hit as more than leaked passwords, because this report shows where those logs go next, a factory that cracks eighty one kinds of wallet and hijacks live sessions at scale. If a machine was hit, assume every wallet and every live session on it is now a target on somebody's console, and respond on that footing. Push all five samples to MalwareBazaar, with the loader first because it was unseen, and report the 56001 through 56003 C2 and the wallet cracker panel fingerprint to ThreatFox so they land in front of everyone else watching this operator. The boxes are rented, so the takedown path is the provider abuse contacts, <code>business@dedik[.]io</code> for the DEDIK hosts and the Hetzner and Kyonix abuse desks for the machines on their networks.
+    </p>
+    <p>
+      <strong>If you are a regular person.</strong> This arrives wearing a friendly costume, a fake anti cheat tool, a VPN installer, something a friend swears you need for a game. The moment you run it, it turns off your antivirus so quietly you will never see it happen, and then it goes for the things that turn into money fast, your Steam sessions and any crypto wallet on the machine. And there is a whole back office on the other end whose only job is to crack those wallets and drain them. A few habits blunt most of it. Be ruthless about where you download game tools and installers from, because the friendly name on the file means nothing. If a program you just ran pops a random "please restart your computer" box for no reason, that is not always nothing, that is sometimes a decoy buying time while something works in the background. And if you keep crypto on a machine that might have run something sketchy, move it to a fresh wallet from a clean device, because the seed phrase on the old one may already be sitting in somebody's cracking queue. If you think a machine is hit, get it off the network and have someone who knows what they are doing look at it, and change your passwords from a different device, because a stolen session can outlive the password you just changed.
+    </p>
+
+    <h2>The honest wrap up</h2>
+    <p>
+      This one started as a folder of file names on a rented Frankfurt box and turned into a map of a small supply chain. A real WinRAR self extractor used as an innocent looking wrapper. A script inside it that walks Windows switching off every alarm in order and erasing the receipts. A locked box it brought its own key for. A remote access trojan that, once the alarms were off, phoned home wrapped in a certificate its owner will not live long enough to see expire. And then, two floors up, the back office where the stolen goods become money, a wallet cracking console hunting eighty one kinds of wallet, tied to the delivery box by a custom sorting tool that appears on both.
+    </p>
+    <p>
+      The thread I will actually pull next is the panel fingerprint and those certificates, because they are the pieces that will still be true after these exact boxes are gone. The hashes will rotate, the file names already do, and the folders will be wiped the day they burn. But a person who hand builds a wallet cracker and a person who makes a thirty one year certificate to save themselves ten seconds both tend to make the same thing again on the next box. The box runs the same custom tool as a proven member of the monetization cluster. That is a strong association and a real finding. Calling it a single operator would be a nicer sentence and a worse one, so I am not writing it. The empty results carried weight here too. The loader no feed had seen was the one worth opening, the shared certificate I hoped for turned out to sit on one host, and the tie back to the box held at association and refused to climb higher no matter how much I wanted it to.
+    </p>
+
+    <div class="callout-note">
+      <strong>Sources and methodology.</strong> Open directory discovery and host profiling via Censys Platform, with infrastructure pivoting cross checked against Shodan and Silent Push. Reputation and prior reporting via VirusTotal. Dynamic detonation via ANY.RUN, two runs, once where the payload staged without firing and once where it fired and beaconed. The samples and the live panels were pulled through a disposable cloud server built for that one purpose and destroyed right after, never to my own machine or network. Static analysis ran with a hand written program parser plus standard string and hashing tools, no execution and no network during that phase. The wallet cracker panels were pulled first hand from two live cluster hosts with a plain anonymous request, and the malice quotes above are the operator's own application code, read without logging in, submitting any field, or running a scan. No Telegram token was recoverable from the client, and the intake dashboard exposed no victim records to me, so no victim data was retrieved or touched. The final Shadow Checker page comparison was done against scanner cached copies, because both of those panels were torn down before I could pull them first hand, and that is noted where it matters. All network indicators are defanged.
+    </div>
+
+    <h2>Indicators</h2>
+
+    <div class="ioc-block">
+      <h4>Delivery host and C2</h4>
+      <pre><code>85.239.149[.]83        AS207043 DEDIK SERVICES LIMITED, Frankfurt   staging + C2 host   LIVE
+  8080/tcp             open directory (payload tray)
+  56001-56003/tcp      PureRAT C2 listeners (56001 observed live)
+  1337/tcp             operator RDP
+C2 certificate CN      Ggdnfld   RSA-4096   is_ca:true   valid to 2057   self-signed
+Provider abuse         business@dedik[.]io
+Steam exfil (local)    http://127.0.0[.]1:6968/__callback/{creds,steam_guard_code,refresh_token,login_state}</code></pre>
+    </div>
+
+    <div class="ioc-block">
+      <h4>Monetization cluster (proven, one identical panel across three hosts)</h4>
+      <pre><code>167.235.0[.]162        AS24940  Hetzner Online GmbH, Falkenstein DE      back office (the hinge)
+  80/tcp               "Mini Backup Server Dashboard"   (stealer-log aggregator)
+  7777/tcp             "Shadow Checker v1.3"            (shared with the box; torn down)
+  8000/tcp             "Shadow Wallet Checker"          (wallet cracker)
+  1337/tcp             operator RDP   (RDP cert CN VM-5a0c7741-a0de-4d93-a261-a2790f22eb07)
+87.58.206[.]99         AS207043 DEDIK SERVICES LIMITED, Zoetermeer NL     2nd DEDIK host
+  8000/tcp             "Shadow Wallet Checker"
+  80/tcp               auth-gate (body sha256 14577b0ba3d3049e7cfa98820033cedd2d0c3b897ef5451d0cc7a985963e7aa9)
+144.31.151[.]202       AS210457 Kyonix Networks Limited, Frankfurt DE     Kyonix host
+  8000/tcp             "Shadow Wallet Checker"
+  3389/tcp             operator RDP   (RDP cert CN VM-a87efbc5-6171-4058-bb01-9dc720056c00)
+
+Shadow Wallet Checker body SHA-256   d5b3a9cc9735621e77ba9a0a2dcd8f4cc044e7a21bdf3d716f13f8e5dd4cd0c4
+  (Censys-indexed body; internet-wide count = 3)
+Shadow Wallet Checker body SHA-256   afec2867697a4b9dca80afae9351779f94d7ac0104a8a24c818d36ecc29d7fb6
+  (fresh first-party pull 2026-07-02; byte-identical on 167.235.0[.]162 and 144.31.151[.]202)
+Malice strings (operator code)       seeds_extracted, passwords_tried, wallets_found,
+                                     clients_scanned, found[0].seed_phrase, "run a scan"
+Shadow Wallet Checker body SHA-1     3abd739a92a0ae06d033a65fa93462a7d1c49c1c
+Panel banner SHA-256                 5946c0a232ea4603f4300e010a893dda81393653318e96aabbaa5ab1d11a40aa
+Mini Backup dashboard body SHA-256   20c97cbf03ff0904a910f88d6052aee7b6e7e7ab5904d2bc53f5e1a989400a5e
+License scheme                       RMTX-prefixed keys
+Exfil                                Telegram bot alert on cracked wallets above a threshold
+DEDIK registrant                     ORG-DSL56-RIPE, admin HRAMCOVS EDUARDS, business@dedik[.]io
+Provider abuse (cluster)             business@dedik[.]io, Hetzner abuse, abuse@kyonix[.]com</code></pre>
+    </div>
+
+    <div class="ioc-block">
+      <h4>Box to cluster bridge (associated, not proven)</h4>
+      <pre><code>Shared tool          "Shadow Checker v1.3"  on BOTH 85.239.149[.]83:8000 and 167.235.0[.]162:7777
+                     internet-wide count of that title = 2 (single scanner; both now torn down)
+Same application     identical internal i18n dictionary (nav.*, panel.jwt/entropy/mitre/sub_technique)
+                     differing only by a cosmetic build revision (palette + tile grid)
+Page fingerprints    box  html_hash -1990035737 (seen 2026-06-14)
+                     hinge html_hash  33085502 (seen 2026-07-01)   -- differ (cosmetic build diff)
+Not recovered        no shared Telegram token, no shared RMTX key, no matching payload hash
+Corroborators        both sides on DEDIK footprint; port-1337 RDP habit; VM-&lt;guid&gt; RDP cert style
+Verdict              strong shared-tooling association; NOT proof of a single operator</code></pre>
+    </div>
+
+    <div class="ioc-block">
+      <h4>Samples (9 served, 5 unique)</h4>
+      <pre><code>ed3171b8abf77dcc65bb6801c784a3a5adf671332fa0ad38b81c5fd87005bcf3
+  Adryhyq.exe   WinRAR SFX loader (Defender teardown + persistence)   NOT ON VT
+  SHA1  4996523f783856f5f964914c65401c3e6374c6f5
+  MD5   dfcc75c15d845541948899841cbf0114
+
+b4b9c4ed31cf8dfbfebc00bba45224b771d3b54502bc008882f4605352b88e94
+  Eddy_VPN.exe = asd.exe = easyAntiCheat.exe   Steam session stealer
+  SHA1  30c798e9a8b8575d551619a217d1e00233d13310
+  MD5   1f7c6164b214ae8cd1fb1e2cd764afe5     VT: "2kcys5xbd.exe" 27/69
+
+b148b4544f738e4ab55e76d993bed98c315adab0c1bccf8a97f90b4d3f73986e
+  BERSERK.exe = easyAntiCheatUpdater.exe       Steam session stealer (newer)
+  SHA1  d476daaf3ae414efedc5b7298dde99b1461cc1de
+  MD5   d159fd6b3a0fe3847267f0940144dc23     VT: "e50g21.exe" 15/50
+
+8df52dfb714967efdefae2b7b04051baae9129525e14e70fa5cfa3bb7cb5900d
+  Wacigo.exe   PureRAT (.NET Reactor)   *dropped at runtime as Yjzlxkdoi.exe, beaconed to :56001*
+  SHA1  5a61d2289ca7ce8443633510efdcdddff251ced5
+  MD5   89049ce9160e55431f5d7cc1234e3ef3     VT: "Htholrzc.exe" 45/69
+
+6f6177d18240f0675a2d42ffefbf869687b984fc32134efd13b904632f3c78f2
+  Yjzlxkdoi.exe   PureRAT (.NET Reactor)
+  SHA1  d3fd5ff6f97b405c2b87794fdb1764c9a8139c69
+  MD5   9b8c1521d986080111d402034f83805c     VT: "Ntsoztomm.exe" 37/69
+
+8c8222df6afd20474c31aa16841fd79bf28fe86a32881c2d91fe7c780fd4030f
+  old.exe   PureRAT (.NET Reactor, older build)
+  SHA1  acac9d9084d5327988743e637304b5d4affe0947
+  MD5   d034ecfd4c4e70fccde3912aff059b0f     VT: "Tnzkdfm.exe" 41/68</code></pre>
+    </div>
+
+    <div class="ioc-block">
+      <h4>Bundle internals and host artifacts</h4>
+      <pre><code>SFX config          Path=WindowsOptions / Setup=install.vbs / Silent=1 / Overwrite=1
+install.vbs         powershell -ExecutionPolicy Bypass -File "run.ps1"  (hidden)
+UnRAR.exe (bundled) legitimate WinRAR CLI 7.20 (Alexander Roshal)
+sfx.rar             nested, AES-encrypted, password ByeFriend!, yields nvidia_dr64.exe
+Install dir         %ProgramFiles%\WindowsOptions
+Log file            %ProgramData%\WindowsOptions\install_log.txt
+Mutex               Global\WindowsOptions_Installer_Mutex
+Persistence task    WindowsUpdateService  (at logon, highest)
+Disguised drops     msedge.exe, msedge_view.exe  (in %APPDATA%\Windows)
+Defender tamper     Set-MpPreference (Realtime/Behavior/Script/Archive off, CloudBlockLevel 0),
+                    citool.exe -r, wscsvc disabled, DetectionHistory wiped, all ASR rules off
+Exclusion artifact  C:\ProgramData\Microsoft DevDiv
+Decoy dialog        "Please restart your computer and launch the application again."
+Steam JS markers    __berserk_pending_creds, __berserk_inject_token, __berserk_via_qr
+Steam files read    config.vdf, loginusers.vdf, local.vdf
+Operator artifact   PureRAT_ThreadException.txt  (DevExpress/.NET stack trace, left in webroot)
+Network signatures  RAT-associated JA3 / JA3S; TLS cert valid &gt;2029 (the Ggdnfld cert)</code></pre>
+    </div>
+
+    <h2>A note on the two runs, and why the first one lied a little</h2>
+    <p>
+      I want to be honest about how the confirmation actually came together, because it was not a single clean detonation. The first run through ANY.RUN staged the whole loader chain, dropped the payload to disk, and switched off the defenses, and then the payload never fired. If I had stopped there, I could have written a confident sounding post that quietly overstated what I had watched, because the scary parts all happened and the RAT was sitting right there on disk. It just had not run.
+    </p>
+    <p>
+      The second run, with a longer window, is the one that actually opened the payload and caught it beaconing to the C2 with matching RAT fingerprints on both ends of the handshake. That gap is the whole lesson. A sandbox run that gets most of the way there is not the same as one that finishes, and the difference between "the RAT was deployed" and "the RAT called home" is exactly the difference a defender cares about. Where the two runs disagreed, I went with what the finishing run showed and said so, rather than blending them into one tidy story that was truer than either run on its own. The same rule ran the whole second half of this piece. Where I wanted a connection and the evidence would only give me an association, I wrote the association and kept the wish out of it.
+    </p>
+
+    <div class="newsletter-cta inline">
+      <h2 class="newsletter-cta-heading">Liked this?</h2>
+      <p class="newsletter-cta-sub">
+        I write one of these a month. Drop your email below to get new posts
+        and research in your inbox. No spam.
+      </p>
+      <form
+        action="https://buttondown.com/api/emails/embed subscribe/ghostinthebit"
+        method="post"
+        class="embeddable-buttondown-form"
+        target="popupwindow"
+      >
+        <label for="bd-email">Enter your email</label>
+        <input type="email" name="email" id="bd-email" placeholder="your@email.com" required />
+        <input type="submit" value="Subscribe" />
+        <p>
+          <a href="https://buttondown.com/refer/ghostinthebit" target="_blank" rel="noopener">
+            Powered by Buttondown.
+          </a>
+        </p>
+      </form>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p><span id="footer-year"></span> · Ghost in the Bit</p>
+  </footer>
+  <script type="module">
+    import { renderSiteNav } from "/platform/lib/site-nav.js";
+    renderSiteNav(document.getElementById("site-nav-inline"), "blog");
+    document.getElementById("footer-year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>
