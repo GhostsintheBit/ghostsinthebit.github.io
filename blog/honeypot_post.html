@@ -108,8 +108,8 @@
       I put a fake water utility controller on the public internet to see who comes knocking on an exposed industrial box. It works. Scanners find it, catalogue it as a real Schneider controller, and I get a clean picture of the internet noise that rains on any exposed device. But making a fake that survives more than a glance is the hard part, because the moment you look at your own box the way a careful attacker would, you start finding the places it quietly tells the truth about itself. A honeypot is a machine pretending to be something it is not, and every service running on it wants to give that pretense away.
     </p>
     <p>
-      So the whole box is built on one rule. Every service that carries the disguise, I wrote by hand, byte by byte, so there is nothing borrowed underneath to give the game away. On top of that it can catch the actual payloads people try to drop on it and lock them in a padded cell where they can never do any harm. And the whole time it watches, because the point of the box is what walks up to it.
-    </p>
+      So the whole box is built on one rule, and it is worth saying why up front. Recent measurement work put a hard number on the problem: by early 2026, researchers scanning the internet estimated that around a quarter of the exposed industrial controllers they could see were not real, they were honeypots, and most were catchable because they lean on off the shelf software with a known fingerprint. Staying out of that detectable quarter is the entire game. So every service that carries the disguise, I wrote by hand, byte by byte, so there is nothing borrowed underneath to give the game away. On top of that it can catch the actual payloads people try to drop on it and lock them in a padded cell where they can never do any harm. And the whole time it watches, because the point of the box is what walks up to it.
+      </p>
     <p>
       Here is the part I find genuinely fun, and the reason I keep doing this. Building a convincing fake of anything, a painting, a movie set, a decoy duck, comes down to the same question every time. Which parts does someone actually check, and which parts can you leave hollow. Get that wrong and you either waste weeks detailing a corner nobody looks at, or you leave the one seam exposed that gives you away. A honeypot is that problem in its purest form, because the people checking your work are trying very hard to catch you, and they have tools.
     </p>
@@ -126,6 +126,7 @@
       <li>Every visitor gets fingerprinted by the shape of its request, not just its self reported name, so a scanner wearing a fake browser costume gives itself away. That fingerprinting is now catching whole families of scanning tools and telling them apart from each other.</li>
       <li>The honest result after all of it: still pure reconnaissance. No external source has written to the controller, nobody has dropped a payload, and every identifiable visitor resolves to a scanner, a botnet, or a commercial research crawler. The noise is the finding, and now I have it fingerprinted across three protocols.</li>
       <li>The box still has a ceiling I lay out plainly near the end, because the hosting itself is a tell no amount of hand written code can hide, and only soak time softens it.</li>
+      <li>None of what knocks is an industrial attacker, and that lines up with what the bigger research teams see too. Independent honeypot studies of exposed ICS report the same shape I get: heavy reconnaissance, almost no protocol level interaction, and no confirmed write attempts. My hand built box reaching the same conclusion is a small independent confirmation of theirs.</li>
     </ul>
 
     <h2>Why write every service by hand</h2>
@@ -250,7 +251,9 @@
     <p>
       That baseline is worth something to anyone defending the real thing. If you stand up honest monitoring on an exposed controller, this wash of commodity scanning is what you will see, and the signal you actually care about, someone who reads your registers with intent and then writes one, or someone who drops a payload, has to be picked out from under all of it. Knowing exactly what the noise sounds like, fingerprint by fingerprint, is how you learn to notice the moment something rises above it. Nothing has risen above it yet. The two signals that would matter, an external write to the controller and a dropped file, are both still empty. Everyone is looking. Nobody is touching.
     </p>
-
+    <p>
+      That result is not just mine, and that is worth sitting with for a second. Larger research teams running their own exposed controller sensors report the same shape I do, mostly reconnaissance, only a thin slice of connections going deep enough to exchange real protocol data, and no confirmed attempts to command the process. When a hand built box on one rented host reaches the same conclusion a well resourced team reaches at scale, that agreement is the useful part. It says the floor I am describing is the real floor, not an artifact of my one box, and it means the rare thing that finally rises above it will be worth trusting when it shows up.
+</p>
     <h2>The ceiling, said plainly</h2>
     <p>
       I promised not to oversell this, so here is exactly where the disguise still ends.
