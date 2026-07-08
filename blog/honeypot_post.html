@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The PLC That Was Never Real, Built So Nothing Underneath Would Give It Away — Ghost in the Bit</title>
+  <meta name="description" content="A fake Schneider Modicon M340 controller honeypot built by hand so nothing underneath leaks the real machine. Three believability seams found and closed, a hand written network management responder that removes a fingerprint instead of hiding it, a medium interaction file capture that locks dropped payloads in an encrypted non executable cell, and an honest account of what actually scans an exposed industrial controller across three protocols. All sensor identifying details scrubbed." />
+  <link rel="icon" type="image/x-icon" href="/images/favicons/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicons/favicon-16x16.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicons/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/images/favicons/favicon-192x192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicons/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <link rel="stylesheet" href="/platform/styles/core.css" />
+  <style>
+    .article figure { margin: var(--space-6) 0; }
+    .article figure img {
+      width: 100%;
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-3);
+      background: var(--bg-2);
+    }
+    .article figcaption {
+      margin-top: var(--space-2);
+      font-size: 0.82rem;
+      color: var(--text-3);
+      text-align: center;
+    }
+    .key-list { list-style: none; padding: 0; margin: var(--space-4) 0; }
+    .key-list li {
+      position: relative;
+      padding: 10px 0 10px 22px;
+      border-bottom: 1px solid var(--border-soft);
+      color: var(--text-1);
+    }
+    .key-list li::before {
+      content: "";
+      position: absolute; left: 0; top: 17px;
+      width: 8px; height: 8px;
+      background: var(--accent);
+      transform: rotate(45deg);
+    }
+    .callout-note {
+      background: var(--bg-2);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 var(--radius-2) var(--radius-2) 0;
+      padding: var(--space-3) var(--space-5);
+      margin: var(--space-5) 0;
+      color: var(--text-1);
+      font-size: 0.95rem;
+    }
+    .callout-note strong { color: var(--text-0); }
+    .veggie {
+      background: var(--bg-2);
+      border: 1px dashed var(--border-soft);
+      border-radius: var(--radius-3);
+      padding: var(--space-3) var(--space-5);
+      margin: var(--space-5) 0;
+      color: var(--text-1);
+      font-size: 0.93rem;
+    }
+    .veggie strong { color: var(--text-0); }
+    .ioc-block {
+      background: var(--code-bg);
+      border: 1px solid var(--code-border);
+      border-radius: var(--radius-3);
+      padding: var(--space-4) var(--space-5);
+      margin: var(--space-5) 0;
+      font-size: 0.85rem;
+    }
+    .ioc-block h4 { margin: 0 0 var(--space-2); color: var(--text-1); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    .tier {
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-3);
+      padding: var(--space-3) var(--space-5);
+      margin: var(--space-4) 0;
+      background: var(--bg-2);
+    }
+    .tier h4 { margin: 0 0 var(--space-2); font-size: 0.9rem; color: var(--text-0); }
+    .tier.proven { border-left: 3px solid var(--accent); }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <a href="/" class="brand"><span class="brand-mark">◯</span><span class="brand-name">Ghost in the Bit</span></a>
+    <nav class="site-nav-inline" id="site-nav-inline"></nav>
+  </header>
+
+  <main class="article">
+    <header class="article-header">
+      <h1 class="article-title">The PLC That Was Never Real, Built So Nothing Underneath Would Give It Away</h1>
+      <div class="article-meta">
+        <span class="category-pill">threat hunting</span>
+        <span class="category-pill">ICS / OT</span>
+        <span class="category-pill">honeypot</span>
+        <time datetime="2026-07-08">July 8, 2026</time>
+        <span>Threat hunting</span>
+        <span>18 min read</span>
+      </div>
+    </header>
+
+    <div class="callout-note">
+      <strong>One note before we start.</strong> Same house rules as always. I am not going to pretend a box I built over a couple of weekends is some war story. Everything below is a honeypot, a fake industrial controller I put on the public internet on purpose so I could sit back and watch who tried the handle. Nothing here touched a real plant, a real controller, or anyone's water supply. The one live machine is a rented cloud box built for this single job, and every log it takes leaves on a one way trip to a second machine that never answers back. I have scrubbed every address, hostname, and port that would let someone find the sensor and burn it, because a honeypot you can locate is a honeypot that stops working. I flag what is proven, what I am only assessing, and where the disguise still falls short, because a honeypot that brags about being perfect is worse than no honeypot at all.
+    </div>
+
+    <p>
+      I put a fake water utility controller on the public internet to see who comes knocking on an exposed industrial box. It works. Scanners find it, catalogue it as a real Schneider controller, and I get a clean picture of the internet noise that rains on any exposed device. But making a fake that survives more than a glance is the hard part, because the moment you look at your own box the way a careful attacker would, you start finding the places it quietly tells the truth about itself. A honeypot is a machine pretending to be something it is not, and every service running on it wants to give that pretense away.
+    </p>
+    <p>
+      So the whole box is built on one rule. Every service that carries the disguise, I wrote by hand, byte by byte, so there is nothing borrowed underneath to give the game away. On top of that it can catch the actual payloads people try to drop on it and lock them in a padded cell where they can never do any harm. And the whole time it watches, because the point of the box is what walks up to it.
+    </p>
+    <p>
+      Here is the part I find genuinely fun, and the reason I keep doing this. Building a convincing fake of anything, a painting, a movie set, a decoy duck, comes down to the same question every time. Which parts does someone actually check, and which parts can you leave hollow. Get that wrong and you either waste weeks detailing a corner nobody looks at, or you leave the one seam exposed that gives you away. A honeypot is that problem in its purest form, because the people checking your work are trying very hard to catch you, and they have tools.
+    </p>
+    <p>
+      Let me show you the three places my box was caught, how I fixed each one, and what the internet has been doing to it since.
+    </p>
+
+    <h2>The short version</h2>
+    <ul class="key-list">
+      <li>I built a fake Schneider Modicon M340 controller from scratch, running live on a Frankfurt cloud host dressed up as a small water utility. It answers the industrial protocol on its usual port, serves a convincing vendor web interface, and responds to network management queries. Every one of those is a decoy with nothing real behind it.</li>
+      <li>Three seams are where a box like this gives itself away, and I walk through each: an encrypted web port that behaves wrong, a network management service that broadcasts the real operating system underneath, and a reverse DNS name that says "cloud provider" instead of "water utility." I closed all three.</li>
+      <li>The fix for the worst leak was to throw out the borrowed network management service entirely and hand write my own, so there is no longer any real system fingerprint hiding under the costume. Same approach I already used for the other two services.</li>
+      <li>I added a medium interaction layer. The web login now accepts the controller's real documented default password and drops the visitor into a convincing read only interior, with a firmware upload page that actually accepts a file. Anything dropped there gets locked in an encrypted, non executable quarantine and shipped off for analysis. Nothing ever runs.</li>
+      <li>Every visitor gets fingerprinted by the shape of its request, not just its self reported name, so a scanner wearing a fake browser costume gives itself away. That fingerprinting is now catching whole families of scanning tools and telling them apart from each other.</li>
+      <li>The honest result after all of it: still pure reconnaissance. No external source has written to the controller, nobody has dropped a payload, and every identifiable visitor resolves to a scanner, a botnet, or a commercial research crawler. The noise is the finding, and now I have it fingerprinted across three protocols.</li>
+      <li>The box still has a ceiling I lay out plainly near the end, because the hosting itself is a tell no amount of hand written code can hide, and only soak time softens it.</li>
+    </ul>
+
+    <h2>Why write every service by hand</h2>
+    <p>
+      The tempting way to stand up a honeypot is to use the operating system's own services wherever you can, and dress them up to play the part. It is fast, and it is also the trap. When you borrow a real service to play a fake role, the real service keeps telling the truth about itself underneath the costume you painted on top. You dress a Linux server up as an industrial controller, and the Linux server keeps quietly answering "I am a Linux server" to anyone who asks the right question.
+    </p>
+    <p>
+      The scanners that catalog the internet ask those questions for a living. So the rule for this box was simple. If a service is going to carry the disguise, I write it myself from nothing, so there is no borrowed truth hiding under the paint. A hand written responder only knows how to say what I taught it to say. It has no real identity to leak because it has no real identity at all.
+    </p>
+    <p>
+      That sounds like more work than it is worth until you see what the borrowed services were giving away.
+    </p>
+
+    <h2>The first tell, a door that behaved wrong</h2>
+    <p>
+      The first crack showed up on the encrypted web port. A real controller of this model does not do encrypted web traffic at all, so the honest thing for that port to do is nothing. My box, though, was sitting behind a cloud firewall that did something subtle and wrong. When you knocked on that port, the connection opened, and then died in total silence.
+    </p>
+    <div class="veggie">
+      <strong>Why a silent open port is a tell.</strong> Think about knocking on a door. A real closed door either stays shut, no answer, or someone opens it and says something. What you do not expect is a door that swings open a crack and then just hangs there, no voice, no movement, nothing. That is the uncanny middle state, and it is exactly what my encrypted port was doing. The connection got accepted, so the door opened, but no service was behind it to say a word, so it hung in silence until it timed out. A scanner that has seen ten thousand real controllers knows that a genuine one either refuses that port cleanly or answers properly. The half open silence is the sound of a firewall in front of an empty room, and an empty room is the sound of a decoy.
+    </div>
+    <p>
+      I chased this one honestly and it took a few tries, because my first instinct, that something was serving on the port, was wrong. I confirmed it by checking the box itself rather than trusting a remote scan, and the box was clear, nothing was listening. The silence was the cloud firewall accepting the connection at its edge and then dropping it, which produces that exact uncanny hang. The fix was to make the port behave like a real controller's would, a clean refusal instead of an accepted connection into nothing. The lesson I keep relearning is to verify against the ground truth on the machine, not the reflection a remote tool hands you.
+    </p>
+
+    <h2>The second tell, and this was the bad one</h2>
+    <p>
+      The network management service was the leak that actually mattered, because it did not just behave wrong, it announced the truth in plain text.
+    </p>
+    <p>
+      This kind of service has a section that describes the "engine" answering the query. On a real embedded controller, that engine is part of the device's own firmware. On my box, because I had borrowed the operating system's standard service to answer those queries, the engine section proudly reported the name and identifier of the open source software package that ships on ordinary Linux servers. So the content of the reply said "I am a Schneider industrial controller," and the engine metadata one layer down said "I am the same management daemon running on a million generic Linux boxes." Those two statements cannot both be true, and the contradiction is exactly the kind of thing a careful analyst or an industrial aware scanner is trained to notice.
+    </p>
+    <div class="veggie">
+      <strong>Why this is the loudest kind of tell.</strong> A costume can be perfect from the front and still be ruined by a laundry tag. Picture someone in a flawless period costume for a film set in the seventeen hundreds, and stitched into the collar is a tag that says machine washable, made in a factory that opened in 2019. The costume is not the problem. The tag telling you when and how it was really made is the problem. My management service was wearing a perfect industrial controller costume with a laundry tag that named the exact modern Linux software it was really made from. Anyone who flipped the collar saw it instantly.
+    </div>
+    <p>
+      I fixed this the same way I had already done the other services. I threw out the borrowed one entirely and wrote my own responder by hand, from nothing, in plain standard library code with no framework underneath. It answers only the specific queries a real controller of this model exposes, with the real device identity, and here is the important part, it speaks only the older versions of the protocol that a real device of this vintage would speak. The whole "engine" concept that leaked the laundry tag only exists in the newest version of the protocol. By refusing to speak that newest version, the way a genuinely old embedded device would refuse, the leaky section does not just get hidden. It stops existing. There is no engine metadata to catch, because there is no engine, because the thing that had one was the borrowed software I deleted.
+    </p>
+    <p>
+      That is the difference between hiding a tell and removing it. Hiding a tell means a determined person can still find it. Removing it means there is nothing left to find, because the part that leaked is simply gone.
+    </p>
+
+    <h2>The third tell, the name on the mailbox</h2>
+    <p>
+      The last one was cosmetic but worth fixing. When you look up who a machine claims to be by its address, there are two separate lookups, and they are controlled by two different people. The forward direction, name to address, and the reverse direction, address to name. I had set the forward one to a hostname that reads like a small water system, which was good. But the reverse lookup, the one that answers "what is the name for this address," was still handing out the cloud provider's automatic default, which reads unmistakably as a rented cloud box.
+    </p>
+    <p>
+      So a scanner checking the mailbox saw a water utility name from one angle and a generic cloud hosting name from the other. I fixed the reverse lookup at the provider level so both directions now agree on the water utility story. It is a small thing, but small mismatches are what a careful reader stacks up, and the goal is to never hand them a single one for free.
+    </p>
+    <div class="veggie">
+      <strong>The honest limit of the mailbox fix.</strong> Here is the part I will not oversell. I fixed the name I control, but the deeper fact underneath, that this address belongs to a big commercial cloud provider, is stamped into the internet's routing tables and I cannot change it. A real water utility does not run its controller out of a rented cloud instance. So an analyst who ignores the friendly name and checks who actually owns the address block still sees "cloud datacenter," and that is a permanent tell I cannot scrub. The name fix removes the loud, obvious contradiction. It does not, and cannot, change the neighborhood the box lives in. I would rather tell you that plainly than let you think a DNS record made the box undetectable.
+    </div>
+
+    <h2>The part that breathes</h2>
+    <p>
+      None of the disguise work would matter if the controller looked dead. A lazy fake answers a request for its sensor readings with the same frozen numbers every time, and anyone who reads it twice knows nothing is alive back there. So underneath all three services is a small simulation of a pump and a tank, humming along on its own clock.
+    </p>
+    <p>
+      The tank level rises when the pump pushes water in and falls against a demand curve that gets heavier in the afternoon, the way a real town uses more water after lunch. The pump kicks on when the tank runs low and shuts off when it fills, with a deliberate gap so it is not stuttering every second. The motor warms up while it runs and cools when it rests. Every number the services report gets pulled live from that little machine as it ticks, so a visitor who reads the values, waits ten minutes, and reads again sees everything has moved and moved in step, the way a real monitored process does. It looks alive because in the one way that counts, it is.
+    </p>
+
+    <h2>The new trick, catching what they try to drop</h2>
+    <p>
+      Everything above is about looking real to someone who is looking. The new capability is about catching someone who decides to do something.
+    </p>
+    <p>
+      A simpler honeypot would log an attempt and reject it. Useful, but that only ever catches the knock, never the thing the visitor was carrying. So this one has a medium interaction layer, and the word medium is load bearing, which I will explain in a second. The web interface now accepts the controller's real documented default login, the one printed in the vendor's own manual, and drops a visitor who uses it into a read only interior that looks like the real device's internal pages. Rack layout, module status, network stats, all static, all fake, all traced from the real manual. And one of those interior pages is a firmware upload form that accepts a file.
+    </p>
+    <div class="veggie">
+      <strong>Why medium interaction, and where I drew the hard line.</strong> There is a spectrum here, and the far end is dangerous. A low interaction honeypot only ever says no, so it never catches a payload. A high interaction one gives the attacker a real system to break into, which means you can watch everything they do, but you have also handed a hostile stranger a working computer they can turn around and use to potentially attack someone else. That is a liability I will not take on, and honestly nobody running a solo research box should. So I built the middle. The interior is a painting, not a room. The upload form accepts a file and says "transfer complete," but nothing the visitor touches is real, nothing executes, and there is no system behind the painting to compromise. They can drop a payload. They cannot get a foothold, and they cannot use my box as a weapon against anyone else. Believable enough that they commit to the drop, locked down enough that the drop can never do anything.
+    </div>
+    <p>
+      When a file lands, it goes straight into a padded cell. It gets stored wrapped in an encrypted archive so nothing on the box, no scanner, no preview tool, can read or run it at rest. The file is written with every permission stripped, onto storage that is mounted so that nothing there can execute even in principle. Then a small record of the drop, who sent it, when, its size, and its cryptographic hash, ships off to the second machine so I get alerted the moment it happens. The payload itself waits, inert and locked, until I deliberately pull it down to a machine built for analysis.
+    </p>
+    <div class="veggie">
+      <strong>Why lock up a file you want to study.</strong> It sounds backwards to encrypt the very thing you are trying to catch. The reason is that a captured payload is live malware, and live malware is dangerous exactly at the moments you handle it, when something copies it, previews it, or a scanner decides to "helpfully" open it. Wrapping it in a locked archive at rest is the standard way researchers neuter a sample between catching it and studying it. The lock does nothing to the sample itself, the bytes are perfectly preserved, so when I am ready I unlock it on a machine set up for the job and it is the exact original file, ready to take apart. It is the difference between carrying a venomous snake loose in your pocket and carrying it in a proper box. Same snake, and you can still study every scale of it later, but nobody gets bitten in transit.
+    </div>
+    <p>
+      That closes the loop from "someone knocked" all the way to "here is the exact thing they tried to drop, in my hands, safe to analyze." As of writing, nobody external has dropped anything. The cell is empty and waiting. But the day it is not empty, I will have the payload and the fingerprint of whoever sent it.
+    </p>
+
+    <h2>What the box records, and the fingerprint that does the real work</h2>
+    <p>
+      Every request across all three services gets logged with its raw bytes and, on the web side, a fingerprint computed from the exact shape of the request rather than what it claims to be.
+    </p>
+    <div class="veggie">
+      <strong>Why the shape of a request beats its name.</strong> When a program makes a web request, it sends a bundle of headers, and the exact makeup of that bundle is a tell, like handwriting. Which headers, in what order, how many, carrying what. Two programs can both sign their name as "Chrome" in the text, but the handwriting gives away which one is a browser and which one is a script wearing a Chrome nametag. A real browser writes with a rich, specific hand, lots of headers in a particular order with a language preference. A scanning tool writes plainly, a few headers, no flourishes. Boil that handwriting down to a short fingerprint and you can catch a tool lying about what it is, and you can catch two different machines that share the same tool even when they lie in different ways. The name is what they tell you. The fingerprint is what they cannot help showing you.
+    </div>
+    <p>
+      That fingerprinting is where the most interesting findings live, so let me show you what it caught.
+    </p>
+
+    <h2>What actually knocks on an exposed controller</h2>
+    <p>
+      The box has been soaking for a while now, and the traffic sorts into a handful of clean buckets. None of it, so far, is an actual industrial attacker. All of it is the ordinary background hum of the internet finding a fresh address, and that hum is exactly what I came to record, because almost nobody writes down what it consists of.
+    </p>
+    <p>
+      The heaviest visitor by a wide margin is a botnet style scanning tool hammering a specific path over and over, the one that a particular brand of internet camera uses. It has no interest in the controller. It sprays the same camera exploit at every address on the internet and mine just happens to be one of them. Commodity noise, high volume, easy to bucket and ignore.
+    </p>
+    <p>
+      Close behind is a credential scanning bot fishing for leaked secret files, asking again and again for the little configuration files careless developers sometimes leave exposed. It never touches the industrial protocol. It runs the same secret hunting list against everything.
+    </p>
+    <p>
+      Then the honestly labeled research scanners, the ones that announce themselves in their own request. A well known mass scanning tool. A research crawler that names itself. A major internet intelligence platform's own scanner, self identified, which is a good sign because it means the platform is actively cataloging my box as a real controller. A commercial attack surface scanner run by a large security vendor. These wave rather than hide, and I bucket them as benign and move on.
+    </p>
+    <div class="veggie">
+      <strong>The cluster that shared one fingerprint.</strong> Here is my favorite finding, and it is a lesson in not overclaiming. A dozen or so different addresses hit the box, all claiming in their text to be the same browser, and every one of them carried the exact same request fingerprint. Same handwriting, a dozen different envelopes. My first instinct was that this was one operator running a fleet. But when I pulled the profile on each address, they scattered. One was a public research scanner that announces itself in its own reverse name. One traced to a hobbyist's personal domain. Several were generic cloud nodes. One self identified as a commercial scanning service. They were not one operator. They were a dozen unrelated people all using the same off the shelf scanning tool, and the shared fingerprint was the tool's handwriting, not any one owner's. That is the whole discipline in one finding. The fingerprint proved they share a tool. It did not prove they share a hand, and the moment the evidence would not carry the bigger claim, I put the bigger claim down.
+    </div>
+    <p>
+      The industrial protocol side is quieter but more interesting per event. A handful of addresses have sent unusual protocol commands, walking through function codes the way you fingerprint an industrial device to identify it. The most persistent of them self identifies in its web requests as a commercial scanning service, and it has been methodically probing the industrial port with several different odd commands. It reads registers, it fingerprints, it moves on. It is the most industrial aware visitor the box has drawn, and it is still a scanning service cataloging me, not an adversary trying to move my pump.
+    </p>
+    <p>
+      And on the network management side, once I had my hand written responder live, I watched a scanner do a full walk of the device, enumerating everything the service exposes rather than just grabbing the identity. I pulled its profile and it resolved to a large security vendor's attack surface management infrastructure, running on cloud hosting but owned, per the address registration, by the vendor itself. A thorough commercial scanner is exactly the kind of visitor that bothers to walk the whole device rather than glance at it, because it is building a complete catalog for a product. Benign, thorough, and a nice confirmation that the hand written responder answers a real walk convincingly.
+    </p>
+
+    <h2>The finding in the noise</h2>
+    <p>
+      The thing worth saying plainly is that the absence of an industrial attacker is the result so far, and not a disappointment.
+    </p>
+    <p>
+      The honest picture of what hits an exposed industrial controller, across three protocols, fingerprinted and sorted, is now sitting in my logs. It is camera botnets, credential bots, research crawlers, commercial scanners, and one persistent industrial aware scan service that catalogs the protocol without ever trying to touch the process. That is the floor. That is what rains on any exposed control system every single day, and it has nothing to do with the process and everything to do with the address existing.
+    </p>
+    <p>
+      That baseline is worth something to anyone defending the real thing. If you stand up honest monitoring on an exposed controller, this wash of commodity scanning is what you will see, and the signal you actually care about, someone who reads your registers with intent and then writes one, or someone who drops a payload, has to be picked out from under all of it. Knowing exactly what the noise sounds like, fingerprint by fingerprint, is how you learn to notice the moment something rises above it. Nothing has risen above it yet. The two signals that would matter, an external write to the controller and a dropped file, are both still empty. Everyone is looking. Nobody is touching.
+    </p>
+
+    <h2>The ceiling, said plainly</h2>
+    <p>
+      I promised not to oversell this, so here is exactly where the disguise still ends.
+    </p>
+    <p>
+      The box sails past a scanner and past an ordinary human pass, and it survives a careful check of the three services, because there is no borrowed software leaking the truth underneath any of them. Where it still strains is against the facts I cannot change. The box lives in a commercial cloud datacenter, and real water utilities do not run controllers out of rented cloud instances, and that is stamped into the routing tables where no hand written service can reach it. The box is also young, and a device that appeared recently looks more like a trap than one that has sat quietly for years. Only time fixes that second one, and nothing fixes the first except moving the box somewhere that would trade one set of tells for another.
+    </p>
+    <p>
+      So the honest state is that I closed every tell I could actually reach, the three service level leaks are gone, and what remains are the infrastructure level facts that every cloud hosted honeypot shares and none can fully hide. That is a real ceiling, and a determined expert who checks the neighborhood rather than the costume can still call it. I would rather write that down myself than have someone find it and tell me the thing I already knew.
+    </p>
+
+    <h2>What comes next</h2>
+    <p>
+      The box soaks. Every morning a summary lands, sorted so I can read it in a glance. The two high interest signals, an external write to the controller and a dropped file, sit at the top where I will see them the instant they fire. Below that, the recon sorted by protocol and clustered by fingerprint, so a scanner that comes back under a new address still shows the same handwriting, and a visitor that touches more than one protocol gets flagged as profiling.
+    </p>
+    <p>
+      If an industrial write ever lands from an address that is not mine, or a payload drops into the cell, or one source starts walking from a quick identity check into a deliberate read of the live process, that is the morning worth writing about, and I will have the raw bytes and the fingerprint waiting. Until then the box does the one thing passive scanning never could. It waits, it listens across three protocols now instead of one, and it keeps an honest record of everything that knocks, with a locked cell ready for the first thing anyone tries to drop.
+    </p>
+
+    <div class="newsletter-cta inline">
+      <h2 class="newsletter-cta-heading">Liked this?</h2>
+      <p class="newsletter-cta-sub">
+        I write one of these a month. Drop your email below to get new posts
+        and research in your inbox. No spam.
+      </p>
+      <form
+        action="https://buttondown.com/api/emails/embed-subscribe/ghostinthebit"
+        method="post"
+        class="embeddable-buttondown-form"
+        target="popupwindow"
+      >
+        <label for="bd-email">Enter your email</label>
+        <input type="email" name="email" id="bd-email" placeholder="your@email.com" required />
+        <input type="submit" value="Subscribe" />
+        <p>
+          <a href="https://buttondown.com/refer/ghostinthebit" target="_blank" rel="noopener">
+            Powered by Buttondown.
+          </a>
+        </p>
+      </form>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p><span id="footer-year"></span> · Ghost in the Bit</p>
+  </footer>
+  <script type="module">
+    import { renderSiteNav } from "/platform/lib/site-nav.js";
+    renderSiteNav(document.getElementById("site-nav-inline"), "blog");
+    document.getElementById("footer-year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>
