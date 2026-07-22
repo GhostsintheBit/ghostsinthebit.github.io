@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Factory Floor That Wasn't: The ICS Census That Turned Into a Decoy Signal — Ghost in the Bit</title>
+  <meta name="description" content="I set out to census exposed ICS across Schneider, Siemens and Rockwell and sort it into three honest buckets: what Censys already flags as a honeypot, what it has not flagged but looks like a decoy, and what is a real device answering for itself. The middle bucket turned out not to be ICS at all, just cloud hosts fronting as several competing vendors at once. The tell that gave them away, one signing key stamped across certificates for competing vendors, became a clean and cheap signal for likely decoys the honeypot label does not yet reach. It held on 146 of 146 hosts, all on AWS, while the genuine gear sat on carrier and utility lines. Read only and enumerate only throughout, with proven kept apart from likely." />
+  <link rel="icon" type="image/x-icon" href="/images/favicons/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicons/favicon-16x16.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicons/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/images/favicons/favicon-192x192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicons/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <link rel="stylesheet" href="/platform/styles/core.css" />
+  <style>
+    /* Report-specific additions, built from core.css tokens so it stays native */
+    .article figure { margin: var(--space-6) 0; }
+    .article figure img {
+      width: 100%;
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-3);
+      background: var(--bg-2);
+    }
+    .article figcaption {
+      margin-top: var(--space-2);
+      font-size: 0.82rem;
+      color: var(--text-3);
+      text-align: center;
+    }
+    .key-list { list-style: none; padding: 0; margin: var(--space-4) 0; }
+    .key-list li {
+      position: relative;
+      padding: 10px 0 10px 22px;
+      border-bottom: 1px solid var(--border-soft);
+      color: var(--text-1);
+    }
+    .key-list li::before {
+      content: "";
+      position: absolute; left: 0; top: 17px;
+      width: 8px; height: 8px;
+      background: var(--accent);
+      transform: rotate(45deg);
+    }
+    .callout-note {
+      background: var(--bg-2);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 var(--radius-2) var(--radius-2) 0;
+      padding: var(--space-3) var(--space-5);
+      margin: var(--space-5) 0;
+      color: var(--text-1);
+      font-size: 0.95rem;
+    }
+    .callout-note strong { color: var(--text-0); }
+    .veggie {
+      background: var(--bg-2);
+      border: 1px dashed var(--border-soft);
+      border-radius: var(--radius-3);
+      padding: var(--space-3) var(--space-5);
+      margin: var(--space-5) 0;
+      color: var(--text-1);
+      font-size: 0.93rem;
+    }
+    .veggie strong { color: var(--text-0); }
+    .ioc-block {
+      background: var(--code-bg);
+      border: 1px solid var(--code-border);
+      border-radius: var(--radius-3);
+      padding: var(--space-4) var(--space-5);
+      margin: var(--space-5) 0;
+      font-size: 0.85rem;
+    }
+    .ioc-block h4 { margin: 0 0 var(--space-2); color: var(--text-1); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    .ioc-block + .ioc-block { margin-top: calc(var(--space-5) * -0.4); }
+    .tier {
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-3);
+      padding: var(--space-3) var(--space-5);
+      margin: var(--space-4) 0;
+      background: var(--bg-2);
+    }
+    .tier h4 { margin: 0 0 var(--space-2); font-size: 0.9rem; color: var(--text-0); }
+    .tier.proven { border-left: 3px solid var(--accent); }
+    .tier.assoc  { border-left: 3px solid var(--text-3); }
+    .tier.unproven { border-left: 3px dashed var(--border-soft); }
+    .data-table { width: 100%; border-collapse: collapse; margin: var(--space-5) 0; font-size: 0.9rem; }
+    .data-table th, .data-table td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border-soft); color: var(--text-1); }
+    .data-table th { color: var(--text-0); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
+    .data-table td.num, .data-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .data-table .accent { color: var(--accent); font-weight: 600; }
+    details > summary { cursor: pointer; color: var(--text-1); font-size: 0.9rem; margin: var(--space-3) 0; }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <a href="/" class="brand"><span class="brand-mark">◯</span><span class="brand-name">Ghost in the Bit</span></a>
+    <nav class="site-nav-inline" id="site-nav-inline"></nav>
+  </header>
+
+  <main class="article">
+    <header class="article-header">
+      <h1 class="article-title">The Factory Floor That Wasn't: The ICS Census That Turned Into a Decoy Signal</h1>
+      <div class="article-meta">
+        <span class="category-pill">internet measurement</span>
+        <span class="category-pill">ICS / OT</span>
+        <span class="category-pill">infrastructure</span>
+        <time datetime="2026 07 18">July 18, 2026</time>
+        <span>Internet measurement</span>
+        <span>24 min read</span>
+      </div>
+    </header>
+
+    <div class="callout-note">
+      <strong>One note before we start.</strong> Same house rules as always. Everything below was done through public internet scan data and read only probes, never onto anyone's device and never as an intrusion. The only active step was a read only identity probe: open a TCP connection, ask a device to say its own name over its own protocol, and hang up. No session, no login, no write, ever. I never touched a control system. I flag exactly which findings are proven, which are only associated, and which stay an inference I will not dress up as more. And one word choice up front, because it matters. Censys owns the word honeypot for the hosts it labels, so I keep it for those. For the ones I found on my own, I say decoy, and I only call a thing a decoy when the certificate math forces it.
+    </div>
+
+    <p>
+      Dressing an ordinary cloud server up as a power plant costs about four dollars and twenty minutes of an evening. Behind most of the industrial badges in this story there is no controller at all, just a rented Linux box wearing them. So the usual headline, that there is a scary amount of industrial gear exposed on the internet, is half right. There is a scary amount of something, and I wanted to map that something cleanly.
+    </p>
+
+    <p>
+      The plan was a census. Take the exposed population across three vendors on Censys, Schneider, Siemens and Rockwell, and sort it into three honest buckets. What Censys already flags as a honeypot. What it has not flagged but that looks like a decoy anyway. And what is a real device answering for itself. Count each bucket its own way, never mix them, and you have an honest picture of how much of the exposed factory floor is actually a factory floor.
+    </p>
+
+    <p>
+      The middle bucket is where the study went sideways in a useful direction. When I went to confirm the unlabeled likely decoys, most of them turned out not to be ICS at all. They were ordinary web hosts, cameras and VPN portals and dashboards, that happened to be fronting as several competing vendors at once. That was not what I went looking for, and it turned out to be the interesting part, because the thing that gave them away, one key signing certificates for competing vendors, is a clean and reusable way to surface likely decoys the honeypot label does not yet reach. The census I planned became the setup for a detection signal I did not, and the rest of this post is mostly that signal, checked by hand and with a script you can rerun.
+    </p>
+
+    <h2>The short version</h2>
+    <ul class="key-list">
+      <li>I set out to census exposed ICS across Schneider, Siemens and Rockwell and split it into three buckets, counted three separate ways and never summed: labeled honeypots, unlabeled likely decoys, and real devices.</li>
+      <li>The middle bucket is where it got interesting. At least <strong>146</strong> hosts outside the current honeypot label were wearing ICS vendor certificates over ordinary web services, cameras, VPN portals, routers and dashboards. The certificates themselves were fabricated, one key signing for competing vendors, so the industrial identity was a costume. The web service underneath was usually real. The badge on top was not.</li>
+      <li>That accident became the finding, a <strong>reusable signal</strong>. One key signing certificates for competing vendors flags these decoys cleanly, fired on <strong>146 of 146</strong> of them, and runs entirely off certificate fields Censys already publishes. All 146 sit on AWS.</li>
+      <li><strong>Real ICS lives on carrier lines.</strong> A read only protocol probe confirmed <strong>at least 79</strong> genuine devices, 78 Allen-Bradley over EtherNet/IP and one Schneider Modicon over Modbus. Every one sat on a telecom or utility network. None were in the cloud.</li>
+      <li><strong>Proven.</strong> The certificates on the 146 are fabricated and each host is a decoy by construction. One machine minted certs for companies that do not share a signing key. That is certificate math, not opinion.</li>
+      <li><strong>Associated, not proven.</strong> Single origin certs per host and an identical build template across the set are consistent with one operation or one toolkit. That is a strong association. It is not proof that one key ties every host to one hand, and I will not claim it.</li>
+      <li><strong>Inference, not finding.</strong> That these decoys are honeypots specifically. The shared key proves fabrication and decoy by construction. Intent is a strong hunch I keep labeled as a hunch.</li>
+    </ul>
+
+    <h2>Why I bothered</h2>
+    <p>
+      A costume matters because people count the costumes. Reports that tally exposed industrial systems by scanning for vendor banners and vendor certificates will happily fold these 146 into a number that then gets read as real risk to real plants. If a large slice of the exposed factory floor is scenery, the honest thing is to tell the scenery from the buildings before anyone budgets around the count. The good news is that the difference is cheap to see, and it never requires kicking a door.
+    </p>
+
+    <div class="veggie">
+      <strong>What fronting as a factory floor costs.</strong> A TLS certificate is just a small text file a server hands you to introduce itself, and the server writes its own introduction. Nothing checks that the words are true. So if I want my rented web box to claim it is a Siemens control station, I generate a certificate that says the issuer is SIMATIC WinCC, and I am done. There is no Siemens in the loop, no factory, no hardware, just a string I chose. That is why a cloud host can wear an industrial badge for the price of the cloud host. The badge is a sticker, and anyone can print a sticker.
+    </div>
+
+    <h2>How I got here</h2>
+    <p>
+      The finder is a single Censys query, and I am going to describe it rather than print it. In plain terms it asks
+      for hosts whose certificate issuers name two of the big three competitors at once, the Schneider, Siemens and
+      Rockwell issuer strings, and it drops anything Censys already flags a honeypot so I am only ever looking at the
+      unlabeled pile. I am keeping the exact field and string form out of the post on purpose. A copy ready finder is
+      also a copy ready evasion recipe, and the point of this piece is the method, not a signature for operators to
+      design around. Anyone on a scanner or research team who wants the literal query can reach me.
+    </p>
+
+    <p>
+      Two things about that finder, so nobody thinks it does more than it does. It is a candidate selector, not the
+      proof. All it returns is a list of hosts whose certificate issuers name two competitors at once. The proof comes in
+      the next step, when I pull each candidate and check whether one key actually signed those competitors' certificates. I
+      key Rockwell on the certificate organization field rather than a single product string, so it catches both the
+      plain company name and the variant with a corporate suffix that some of these certs carry. Widen or narrow
+      those vendor strings and the count moves, which is the honest way to say the 146 is a floor tied to one
+      specific finder, not a universal total.
+    </p>
+
+    <p>
+      This snapshot returned 146 hosts. Every one of them lives on AWS, 139 on AMAZON-02 and 7 on AMAZON-AES. Hold that in your head, because it is half the whole story before we even open a host.
+    </p>
+
+    <h2>One host, opened all the way up</h2>
+    <p>
+      The fastest way to feel why these are costumes is to sit with one. Meet <code>15.165.xxx.xxx</code>, an AMAZON-02 box in Incheon. Censys reads its operating system as Axis Camera Firmware and hangs seven everyday labels on it, camera, IoT, login page, remote access, VPN, web server. It runs nine services, all of them plain HTTP over TLS, and not one speaks an industrial protocol. What it does carry is eight certificates that read like a trade show badge rack.
+    </p>
+
+    <figure>
+      <img src="/images/decoy-host.png" alt="Censys host summary for 15.165.xxx.xxx showing camera and VPN labels, Axis OS, an Amazon network, and nine HTTP services" />
+      <figcaption>
+        One AWS host, nine services, and not an industrial protocol among them. The labels read camera and VPN. The
+        certificates, port by port, read Siemens, Schneider, Rockwell, Honeywell and Tridium.
+      </figcaption>
+    </figure>
+
+    <pre><code>15.165.xxx.xxx   AMAZON-02   Incheon, KR   OS read as "Axis Camera Firmware"
+
+  port    the real service behind it        the certificate it wears
+  1234    Dask dashboard (Tornado)          CN=Experion, O=Honeywell
+  1963    Cambium router login (Boa)        CN=Rockwell Automation Certificate Authority
+  4839    "system-admin-agent" at /a2a      CN=Unity Pro, O=Schneider Electric
+  4840    FortiManager login (miniupnpd)    CN=Honeywell PKI Certificate, O=Honeywell
+  6003    Axis camera page (Apache)         CN=SCADA-Server
+  8088    "mcp-server" at /mcp              (plain HTTP, no cert)
+  11101   GlobalProtect VPN portal          CN=SIMATIC WinCC, O=Siemens
+  11885   GlobalProtect VPN portal          CN=OPC-Server
+  39075   Axis camera page (Apache)         C=US, O=Tridium, CN=Niagara4</code></pre>
+
+    <p>
+      Read the two columns against each other. Taken one at a time, most of these pairings could almost pass. Real vendors do ship web logins, VPN portals and dashboards, so a single service sitting under a single vendor badge is nothing unusual on its own. What does not add up is all of it at once. This one host is fronting as Honeywell, Siemens, Schneider, Rockwell and Tridium across its ports at the same time, and no single real device belongs to five competing vendors at once. It is also a rented AWS box, not a piece of gear in a plant. Either fact on its own might have an innocent story. Both together do not, and the certificate math below settles it.
+    </p>
+
+    <figure>
+      <img src="/images/cert-costume.png" alt="Four ports of one host, each serving ordinary web software under a certificate from a different competing industrial vendor" />
+      <figcaption>
+        The same host, four of its ports opened up. Each panel shows the real software Censys sees on top and the
+        certificate issuer underneath. A router login under a Rockwell badge, a VPN portal under Siemens, an admin
+        agent under Schneider, a dashboard under Honeywell. Any one of these could plausibly belong to that vendor.
+        What gives the host away is that all four competing vendors, plus a fifth, are stacked on the same rented
+        cloud box at once.
+      </figcaption>
+    </figure>
+
+    <div class="callout-note">
+      <strong>A do not touch, for the responsible reader.</strong> Two of this host's ports serve agent style endpoints, a <code>system-admin-agent</code> at <code>/a2a</code> that advertises system administration style skills, and an <code>mcp-server</code> at <code>/mcp</code>. Treat those as bait. Never point automated agent tooling at a stranger's <code>/a2a</code> or <code>/mcp</code>. My probes never touched either one. I read the service banners the scanner already had and left them alone.
+    </div>
+
+    <h2>The tell that unmasks the costume</h2>
+    <p>
+      A rack of mismatched badges is suggestive. It is not proof, because a determined defender could argue that some odd honeynet legitimately presents many vendor names. So I stopped trusting the words printed on the badges and went to the one thing on a certificate that cannot be forced into agreement.
+    </p>
+
+    <div class="veggie">
+      <strong>The stamp that lives inside the box.</strong> Here is the part that does the work. Every certificate a box hands out gets stamped by a secret number that lives inside that box and nowhere else. You cannot forge the stamp without the secret, and the box leaves the exact same stamp on everything it signs. Censys writes that stamp down for every certificate it scans. So I never have to believe the vendor name printed on the front. I line the stamps up and ask a blunter question, which certificates rolled off the same machine. That stamp is what a cryptographer would call the public key fingerprint. The name is not the interesting part. What the name lets you do is.
+    </div>
+
+    <p>
+      I lined up the stamps on the exemplar host by hand, one row per port, and watched two of them do all the signing.
+    </p>
+
+    <pre><code># host 15.165.xxx.xxx, per port: the cert issuer, and the SPKI key that stamped it
+port    issuer CN / O                                SPKI key
+1234    Experion / Honeywell                         KEY_A   
+4840    Honeywell PKI Certificate / Honeywell        KEY_A   
+6003    SCADA-Server                                 KEY_A   
+11101   SIMATIC WinCC / Siemens                      KEY_A   
+1963    Rockwell Automation Certificate Authority    KEY_B   
+4839    Unity Pro / Schneider Electric               KEY_B   
+11885   OPC-Server                                   KEY_B   
+39075   Niagara4 / Tridium                           KEY_B   
+
+# KEY_A    stamped both a Siemens cert and a Honeywell cert
+# KEY_B    stamped Schneider, Rockwell and Tridium certs
+# competing vendors never share a signing key, so one machine minted both</code></pre>
+
+    <div class="veggie">
+      <strong>Why two competing badges on one stamp is impossible.</strong> A Siemens control station and a Schneider control station are built by companies that compete for the same customers. They do not hand each other the secret key that signs their products, any more than Coke and Pepsi share a printing press for their letterhead. So when a single stamp signs a Siemens certificate and a Schneider certificate on the same box, there is no honest story that fits. One machine printed both badges and just typed different company names into each. That is the whole proof. It is not a hunch about how the host feels. It is arithmetic on a number the operator could not hide.
+    </div>
+
+    <h2>A signal that extends the honeypot label</h2>
+    <p>
+      Censys labels honeypots by pattern matching against its scan data, and it does that carefully and on purpose. It even separates true honeypots from tarpits and scanner bait in its own writing. That precision is exactly right, a label you can trust is worth far more than one that fires on everything. What it leaves is room for a complementary signal, and the useful part of this whole study is that there is a clean, cheap one available, computed entirely from data Censys already publishes.
+    </p>
+
+    <p>
+      I did not take my own eyeballs on one host as proof of a pattern. I wrote a small script that groups every certificate on a host by its actual public key, maps each issuer to a vendor family, and flags any key that signed for two or more competing families. Then I ran it across all 146.
+    </p>
+
+    <pre><code>python3 spki_audit.py hosts --full
+
+hosts analysed: 146
+hosts with a key crossing 2+ competing vendors: 146 of 146
+
+  51.49.xxx.xxx     &lt;key&gt;  ->  GE, Rockwell, Schneider, Tridium
+  15.222.xxx.xxx    &lt;key&gt;  ->  GE, Honeywell, Rockwell, Schneider
+  18.61.xxx.xxx      &lt;key&gt;  ->  Emerson, Honeywell, Schneider, Siemens, Yokogawa
+  15.165.xxx.xxx    KEY_A    ->  Honeywell, Siemens
+  15.165.xxx.xxx    KEY_B    ->  Rockwell, Schneider, Tridium
+  99.79.xxx.xxx     &lt;key&gt;  ->  ABB, Emerson, GE, Honeywell, Mitsubishi, Rockwell,
+                                Schneider, Siemens, Tridium, Yokogawa
+  ... (146 of 146 carried it)</code></pre>
+
+    <p>
+      Every host in the set had at least one key that signed for competing vendors. Plenty of them go further than the exemplar. On the busiest, a single key had signed certificates for ten competing vendors at the same time, from ABB to Yokogawa, the whole industry stamped by one machine.
+    </p>
+
+    <div class="veggie">
+      <strong>Before anyone emails me about the Siemens hardcoded key.</strong> There is a real advisory, CVE-2022-38465, where a family of Siemens controllers shipped sharing one hardcoded key. So key reuse is a real phenomenon. The catch is that it is reuse within one vendor, Siemens keys on Siemens gear. It explains a Siemens certificate sharing a key with another Siemens certificate. It has nothing to say about a single key that signs for Siemens and Schneider and Rockwell at once, because no advisory hands one company's key to its competitors. Within vendor reuse is a footnote here. Cross vendor reuse is the finding.
+    </div>
+
+    <p>
+      The signal is strong, so let me fence in exactly what it proves. It proves the certificates are fabricated, one machine minted certs for companies that do not share a secret, which is a fact and not an opinion. That makes each of the 146 a decoy by construction, again a fact. What it does not prove is why. I cannot tell you from a certificate whether a given box is a classic honeypot, a scanner trap, or somebody's research rig, so I stop at decoy and treat the honeypot read as a strong hunch rather than a finding. For a scanner like Censys the appeal is the precision. This is a cheap query over fields it already publishes, it surfaces at least 146 unlabeled likely decoys, and it did not misfire once in the batch I checked by hand.
+    </p>
+
+    <h2>What Censys already calls them</h2>
+    <p>
+      It is only fair to show what Censys does tag these hosts as, because the labels it already applies are accurate and genuinely useful. So I extended the same pull to grab every label on all 146 and tally them, which is a small script anyone can rerun against the same query to confirm what follows.
+    </p>
+
+    <table class="data-table">
+      <thead><tr><th>Censys label carried by the 146</th><th class="num">Hosts of 146</th></tr></thead>
+      <tbody>
+        <tr><td>LOGIN_PAGE</td><td class="num">145</td></tr>
+        <tr><td>VPN</td><td class="num">95</td></tr>
+        <tr><td>REMOTE_ACCESS</td><td class="num">93</td></tr>
+        <tr><td>WEB_SERVER</td><td class="num">90</td></tr>
+        <tr><td>CAMERA</td><td class="num">87</td></tr>
+        <tr><td>IOT</td><td class="num">87</td></tr>
+        <tr><td>ROUTER</td><td class="num">86</td></tr>
+        <tr><td>ELECTRICAL</td><td class="num">13</td></tr>
+        <tr><td>POWER_METER</td><td class="num">11</td></tr>
+        <tr><td>MEDICAL</td><td class="num">10</td></tr>
+        <tr><td>BUILDING_AUTOMATION</td><td class="num">9</td></tr>
+        <tr><td class="accent">HONEYPOT</td><td class="num accent">0</td></tr>
+      </tbody>
+    </table>
+
+    <p>
+      Two things jump out. Nearly every host, 145 of 146, is a login page of some kind, and most are cameras, VPN portals, routers or plain web servers, the everyday furniture of the internet. A handful also pick up heavier labels, 13 ELECTRICAL, 11 POWER_METER, 10 MEDICAL and 9 BUILDING_AUTOMATION, all accurate descriptions of what the boxes present on the wire. Those surface labels do their job well. The shared key signal simply works one layer down, on how the certificates were built, so it layers on top of what Censys already reads rather than competing with it. A box can be a genuine looking login page on the surface and a decoy underneath, and both readings are true at once.
+    </p>
+
+    <p>
+      The software underneath tells the same story from another angle. The same small handful of internet facing login pages repeats across the whole set, Apache on 104 of the 146, a Palo Alto GlobalProtect portal on 93, the Boa web server that ships on real cameras and routers on 90, Atlassian Confluence on 86. Real vendor gear runs web front ends too, so none of these is damning on its own. What stands out is that the same wardrobe of common login pages, the kind attackers probe all day, turns up host after host, which reads like one shared kit rather than 146 independent devices each dressed by hand.
+    </p>
+
+    <h2>What the decoys are dressed up as</h2>
+    <p>
+      Bucket the 146 by the vendor strings in their certificates and the wardrobe is enormous. These are distinct host counts, so no host appears twice in a row, but a single host wears many rows at once.
+    </p>
+
+    <table class="data-table">
+      <thead><tr><th>Badge in the certificates</th><th class="num">Hosts of 146</th></tr></thead>
+      <tbody>
+        <tr><td>Generic ICS strings like SCADA-Server, OPC-Server, HMI and PLC</td><td class="num">118</td></tr>
+        <tr><td>Rockwell</td><td class="num">114</td></tr>
+        <tr><td>Siemens</td><td class="num">104</td></tr>
+        <tr><td>Schneider</td><td class="num">103</td></tr>
+        <tr><td>Emerson</td><td class="num">49</td></tr>
+        <tr><td>ABB</td><td class="num">49</td></tr>
+        <tr><td>GE</td><td class="num">48</td></tr>
+        <tr><td>Yokogawa</td><td class="num">48</td></tr>
+        <tr><td>Tridium</td><td class="num">39</td></tr>
+        <tr><td>Honeywell</td><td class="num">35</td></tr>
+        <tr><td>Mitsubishi</td><td class="num">12</td></tr>
+      </tbody>
+    </table>
+
+    <p>
+      The top three, Rockwell, Siemens and Schneider, are no surprise, because the query itself demanded two of those three. The tell is everything stacked below them. The ABB, Emerson, GE, Yokogawa and Honeywell badges were never asked for, and a single real device would never present them all at once. The most common badge of all is not even a brand, it is a generic SCADA-Server or OPC-Server string riding on well over a hundred of the hosts. No box sticks to one costume, which is why these add up to far past 146 even though only 146 hosts are in the set.
+    </p>
+
+    <h2>The real devices, and where they live</h2>
+    <p>
+      A census needs the other end too, the genuine article. So I ran a read only identity probe against the Rockwell EtherNet/IP candidates, the kind of query a real controller answers by stating its own vendor and product code. Here is one run, redacted.
+    </p>
+
+    <pre><code># read only CIP List Identity against the carrier EtherNet/IP candidates. no session, nothing written.
+$ python3 enip_identity_probe.py --targets carrier_eip.txt --read-only
+
+# IPs and serials redacted. one line per host that answered.
+&lt;REDACTED&gt;  -&gt;  vendor='Rockwell Automation/Allen-Bradley'  PLC  product='1766-L32AWA C/21.07'  rev 2.21  serial &lt;REDACTED&gt;
+&lt;REDACTED&gt;  -&gt;  vendor='Rockwell Automation/Allen-Bradley'  PLC  product='1769-L33ER/A LOGIX5333ER'  rev 36.12  serial &lt;REDACTED&gt;
+&lt;REDACTED&gt;  -&gt;  vendor='Rockwell Automation/Allen-Bradley'  PLC  product='ControlLogix 5580 Controller'  rev 33.17  serial &lt;REDACTED&gt;
+&lt;REDACTED&gt;  -&gt;  vendor='Rockwell Automation/Allen-Bradley'  PLC  product='Emulate 5580 Controller'  rev 38.11  serial &lt;REDACTED&gt;
+------------------------------------------------------------------------
+Done. 87 carrier EtherNet/IP candidates probed.
+    78  Allen-Bradley identities  (77 physical PLCs, 1 software emulator)
+     1  other vendor identity
+     8  unreachable</code></pre>
+
+    <p>
+      That is 78 genuine Allen-Bradley identities coming back over EtherNet/IP, real MicroLogix, CompactLogix and ControlLogix controllers, plus one that openly labels itself a software emulator. On Modbus, one more host returned a real Schneider Modicon identity. That is at least 79 confirmed real, and every one of them sat on a carrier, telecom or utility network. None were in the cloud. I say at least 79, not only 79, because a probe confirms what answers and stays silent about what did not.
+    </p>
+
+    <div class="veggie">
+      <strong>One port, two answers.</strong> A second tell rides along in the very same port. Real controllers on 44818 answer in EtherNet/IP, the protocol that port exists for, so Censys tags the service EIP. These hosts answer it with a plain web server, so it comes back tagged HTTP. On its own that proves nothing, since real gear serves web pages too. But a host that wears a fabricated EtherNet/IP certificate and cannot speak EtherNet/IP on that port has stopped adding up. The certificate carries the proof. This just corroborates it.
+    </div>
+
+    <p>
+      Zoom out from my confirmed 79 to the whole population Censys already sees answering EtherNet/IP on 44818, more than seven thousand hosts, and the same shape holds. Group them by network and the carriers run the table.
+    </p>
+
+    <figure>
+      <img src="/images/asn-mirror.png" alt="Two network breakdowns side by side, real EtherNet/IP led by carriers on the left, the 146 decoys entirely on Amazon on the right" />
+      <figcaption>
+        The mirror. On the left, the real EtherNet/IP population that answers on 44818, led by Verizon, AT&amp;T, TELUS
+        and Telefónica. On the right, the 146 confirmed decoys, sitting entirely on Amazon. Real infrastructure and
+        decoy infrastructure barely wave at each other across the room.
+      </figcaption>
+    </figure>
+
+    <table class="data-table">
+      <thead><tr><th>Network answering EtherNet/IP on 44818</th><th class="num">Hosts</th><th class="num">Share</th></tr></thead>
+      <tbody>
+        <tr><td>Verizon</td><td class="num">2,295</td><td class="num">30%</td></tr>
+        <tr><td>AT&amp;T Mobility</td><td class="num">650</td><td class="num">8%</td></tr>
+        <tr><td>TELUS</td><td class="num">304</td><td class="num">4%</td></tr>
+        <tr><td>Telefónica de España</td><td class="num">298</td><td class="num">4%</td></tr>
+        <tr><td>Korea Telecom</td><td class="num">194</td><td class="num">3%</td></tr>
+        <tr><td>Orange</td><td class="num">157</td><td class="num">2%</td></tr>
+        <tr><td>Bell Canada</td><td class="num">155</td><td class="num">2%</td></tr>
+        <tr><td>Deutsche Telekom, Telecom Italia, Comcast, Vodafone, T-Mobile, Telstra, Rogers and a long carrier tail</td><td class="num">more</td><td class="num"></td></tr>
+        <tr><td>Akamai and Alibaba, the cloud entries, and mostly Conpot honeypots</td><td class="num">~1,000</td><td class="num">13%</td></tr>
+        <tr><td class="accent">Amazon, home of all 146 cert decoys</td><td class="num accent">24</td><td class="num accent">&lt;1%</td></tr>
+      </tbody>
+    </table>
+
+    <p>
+      That is the exact opposite of the decoy crowd, and it is the cleanest signal in the study. Genuine gear that speaks EtherNet/IP sits out where factories actually connect from, on telecom and utility lines, with Verizon alone carrying nearly a third of it. The cloud does turn up, but look at who. The Akamai and Alibaba boxes are largely emulators and Conpot style honeypots rather than real controllers. And Amazon, the home of every one of the 146 cert decoys, sits at the bottom with two dozen, because the decoys answer HTTP on this port rather than the protocol they dress up as.
+    </p>
+
+    <div class="veggie">
+      <strong>Why real gear rides carrier lines and costumes ride the cloud.</strong> A working controller sits in a plant, a substation, a pump house, a cell tower cabinet, and it reaches the internet the way those places do, through a wireless carrier or a regional utility link. It is a physical thing bolted to a wall in the physical world. A costume has no plant behind it. It is a virtual machine somebody rented by the hour, and you rent virtual machines from clouds. So the network a host lives on is itself a tell. Carrier and utility space is where the real ones have to be. Cheap cloud space is where the costumes prefer to be.
+    </div>
+
+    <h2>What is proven, what is associated, what is not</h2>
+    <p>
+      Here is the whole thing sorted into tiers, so nobody has to guess which brick carries which load.
+    </p>
+
+    <div class="tier proven">
+      <h4>Proven</h4>
+      <p>
+        The 146 hosts carry fabricated certificates and each is a decoy by construction. On every one, at least one signing key stamped certificates for two or more competing vendors, which no honest device or vendor does. The audit fired on 146 of 146, and I confirmed the exemplar host by hand. Separately, at least 79 genuine devices answered a read only protocol probe with coherent vendor identities, and every one lived on a carrier, telecom or utility network. All 146 decoys sit on AWS. All 79 real devices do not.
+      </p>
+    </div>
+
+    <div class="tier assoc">
+      <h4>Associated, not proven</h4>
+      <p>
+        The 146 look like one operation or one toolkit. Each host's certificates trace back to a single origin on that host, and the build template repeats across the set, the same fabricated wardrobe stapled to the same kind of ordinary web box. That is a strong association, consistent with a single operator or a single kit spun up wherever there was cloud capacity. It stops short of proof, because I recovered no one key that ties all 146 hosts to one hand, and I will not narrate one into existence.
+      </p>
+    </div>
+
+    <div class="tier unproven">
+      <h4>Inference, and I keep it labeled as one</h4>
+      <p>
+        That these decoys are honeypots specifically. The certificate math proves the badges are fabricated and the hosts are decoys by construction. Whether any given one is a classic honeypot, a scanner trap, or a research rig is an intent question a certificate cannot answer. I read the wardrobe of attacker bait login pages as leaning honeypot, and I keep that a strong hunch rather than dressing it up as a finding.
+      </p>
+    </div>
+
+    <h2>The ceiling I will not publish as a number</h2>
+    <p>
+      The tight finder returned 146, and I stand behind every one of them cert by cert. A looser search for any single ICS vendor certificate sitting over ordinary AWS web services returns a much larger pile, on the order of hundreds more, that looks like the same cert theater. I am not putting that bigger number in the headline, because I only ran the shared key test to completion on the 146. Treat the 146 as a confirmed floor and the wider pile as a ceiling that fits the pattern but stays unverified. The number I can defend cert by cert beats the bigger number I cannot.
+    </p>
+
+    <h2>The signal, as a tripwire</h2>
+    <p>
+      Throwaway infrastructure gets rebuilt the moment it burns, so the durable value is in the check that survives a redeploy. The certificates rotate, the labels drift, the hosts get wiped. The one thing that stays true is the arithmetic: a single key signing for competing vendors is fabrication, full stop. That makes it a clean tripwire. Group certificates by public key, map issuers to vendor families, and flag any key that crosses two or more competitors. It runs off fields Censys already records, it surfaced at least 146 likely decoys the honeypot label does not yet reach, and it did not misfire once in the batch I checked by hand. That is the kind of cheap, reproducible signal worth feeding a label.
+    </p>
+
+    <p>
+      Most of this is reproducible from the description alone. The candidate finder is the certificate search I
+      described above, held back only in its exact string form. The label tally and the shared key audit are two
+      small scripts that read the pulled host JSON and print the same numbers you just read. The real device side is
+      a read only identity probe and a public facet on <code>host.services: (port=44818 and protocol="EIP")</code>,
+      which finds genuine gear rather than decoys, so it stays in the open. Rerun any of it and diff against my
+      counts.
+    </p>
+
+    <h2>The honest wrap up</h2>
+    <p>
+      I set out to count a census and walked out holding a detection signal, which turned out to be the better souvenir. The plan was three clean buckets, labeled honeypots, unlabeled likely decoys, and real devices. The middle bucket refused to be ICS, and that refusal was the gift. Most of those hosts were ordinary cloud boxes in factory costumes, and the thread that unmasked them, one key signing for competitors that would never share a key, is a cheap and reusable way to spot the next batch of decoys before anyone counts them as real risk.
+    </p>
+    <p>
+      The pieces that will still be true after these exact boxes are gone are the certificate math and the geography. A costume can change its badges, its labels, and its address overnight. It cannot make a real key sign for two competitors, and it cannot move a rented cloud box onto a carrier's factory lines. So if you count exposed ICS, stop trusting the costume. Ask a box to say its own name in its own protocol, and read how its certificate was built rather than what it says on the front. When I did that, the real factory floor turned out to be a lot smaller, and a lot further from the cloud, than the badges wanted me to believe.
+    </p>
+
+    <div class="callout-note">
+      <strong>Sources and methodology.</strong> Candidate discovery and host profiling via the Censys Platform, with the network facet cross checked in the same tool. The shared key audit and the label tally are two small Python scripts that read pulled host JSON with no network access. The real device confirmation is a read only CIP List Identity and Modbus identity probe: open a TCP connection, request the device's own identity, and close, with no session, no login, and no write at any point. I never touched a control system, and the only hosts I actively probed were candidate industrial endpoints answering on their own protocol ports. Every real device IP and serial is redacted. The 146 decoy count is a confirmed floor tied to one specific query, and the wider pile is left as an unverified ceiling.
+    </div>
+
+    <h2>Indicators and reproduction</h2>
+
+    <div class="ioc-block">
+      <h4>The candidate finder (returns 146; all on AWS)</h4>
+      <pre><code>method   Censys certificate search: issuer names two competing ICS vendors on one host
+         (Schneider + Siemens + Rockwell issuer strings), excluding HONEYPOT-labeled
+         Rockwell keyed on the issuer organization field to catch name variants
+
+exact query withheld on purpose (a copy-ready finder is a copy-ready evasion recipe);
+available to scanner / research teams on request
+
+result   146 hosts   139 AMAZON-02 + 7 AMAZON-AES   22 countries</code></pre>
+    </div>
+
+    <div class="ioc-block">
+      <h4>Exemplar decoy host</h4>
+      <pre><code>15.165.xxx.xxx   AMAZON-02   Incheon, KR   OS read as "Axis Camera Firmware"
+  labels        CAMERA IOT LOGIN_PAGE REMOTE_ACCESS VPN WEB_SERVER   (no HONEYPOT, no ICS)
+  9 services    all HTTP over TLS; none speak an industrial protocol
+  2 SPKI keys   KEY_A    -> Honeywell + Siemens certs
+                KEY_B    -> Schneider + Rockwell + Tridium certs
+  bait          /a2a "system-admin-agent" (port 4839), /mcp "mcp-server" (port 8088)  -- do not touch</code></pre>
+    </div>
+
+    <div class="ioc-block">
+      <h4>The shared key signal (proven; 146 of 146)</h4>
+      <pre><code>test          group each host's certs by public key (SPKI / RSA modulus),
+              map issuer -> vendor family, flag any key crossing 2+ competing families
+result        146 of 146 hosts carry a crossing key
+extreme case  one key on one host signed for ABB, Emerson, GE, Honeywell, Mitsubishi,
+              Rockwell, Schneider, Siemens, Tridium and Yokogawa at once (ten competitors)
+not explained by  CVE-2022-38465 (Siemens hardcoded key) -- that is WITHIN-vendor reuse only
+scripts       pull_labels.py (label + software + network + country rollups)
+              spki_audit.py  (the crossing audit; run: python3 spki_audit.py hosts --full)</code></pre>
+    </div>
+
+    <div class="ioc-block">
+      <h4>Real devices (at least 79; all carrier / utility)</h4>
+      <pre><code>probe         read only CIP List Identity (EtherNet/IP) and Modbus identity
+confirmed     78 Allen-Bradley over EtherNet/IP (77 physical PLCs + 1 software emulator)
+              1 Schneider Modicon over Modbus
+              = at least 79 real, every one on a telecom or utility network, none in cloud
+real EtherNet/IP population facet   host.services: (port=44818 and protocol="EIP")
+              ~7,696 hosts; Verizon 2,295 (30%), AT&amp;T 650, TELUS 304, Telefonica 298, ...
+              Amazon 24 (&lt;1%)  <- decoys answer HTTP on 44818, not EIP
+cloud EIP     Akamai/Linode and Alibaba entries are largely Conpot honeypots (already flagged)</code></pre>
+    </div>
+
+    <div class="ioc-block">
+      <h4>Durable tells (survive a rebuild)</h4>
+      <pre><code>certificate math   one signing key across 2+ competing vendor certs on one host = fabricated
+geography          real ICS answers its own protocol on carrier/utility ASNs;
+                   AWS "ICS" answers HTTP and is costume
+label gap seed     ICS vendor certs over ordinary web software, on AWS, with no HONEYPOT label
+scope note         146 = confirmed floor (this query); wider "cert theater" pile = unverified ceiling</code></pre>
+    </div>
+
+    <div class="newsletter-cta inline">
+      <h2 class="newsletter-cta-heading">Liked this?</h2>
+      <p class="newsletter-cta-sub">
+        I write one of these a month. Drop your email below to get new posts
+        and research in your inbox. No spam.
+      </p>
+      <form
+        action="https://buttondown.com/api/emails/embed subscribe/ghostinthebit"
+        method="post"
+        class="embeddable-buttondown-form"
+        target="popupwindow"
+      >
+        <label for="bd-email">Enter your email</label>
+        <input type="email" name="email" id="bd-email" placeholder="your@email.com" required />
+        <input type="submit" value="Subscribe" />
+        <p>
+          <a href="https://buttondown.com/refer/ghostinthebit" target="_blank" rel="noopener">
+            Powered by Buttondown.
+          </a>
+        </p>
+      </form>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p><span id="footer-year"></span> · Ghost in the Bit</p>
+  </footer>
+  <script type="module">
+    import { renderSiteNav } from "/platform/lib/site-nav.js";
+    renderSiteNav(document.getElementById("site-nav-inline"), "blog");
+    document.getElementById("footer-year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>
